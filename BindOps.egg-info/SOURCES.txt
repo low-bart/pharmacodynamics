@@ -1,0 +1,8 @@
+README.md
+setup.py
+BindOps/__init__.py
+BindOps/load_raw_binding_data_test.py
+BindOps.egg-info/PKG-INFO
+BindOps.egg-info/SOURCES.txt
+BindOps.egg-info/dependency_links.txt
+BindOps.egg-info/top_level.txt
