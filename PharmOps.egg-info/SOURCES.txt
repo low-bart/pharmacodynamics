@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+PharmOps/__init__.py
+PharmOps/bindMods.py
+PharmOps.egg-info/PKG-INFO
+PharmOps.egg-info/SOURCES.txt
+PharmOps.egg-info/dependency_links.txt
+PharmOps.egg-info/requires.txt
+PharmOps.egg-info/top_level.txt
