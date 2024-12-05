@@ -18,7 +18,7 @@ class WellData:
         self.comments.append(comment)
 
     def make_drug_report(self, row):
-        return DrugReports()
+        return DrugReports([], [])
 
 class DrugReports:
     drug = []
