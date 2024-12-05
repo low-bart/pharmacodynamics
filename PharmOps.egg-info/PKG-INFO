@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: PharmOps
-Version: 0.0.0
+Version: 0.1.0.post0+dirty
 Summary: A package to process 96-well plate pharmacology binding data
 Author-email: Lowell Bartlett <bartlelo@ohsu.edu>
 Maintainer-email: Lowell Bartlett <bartlelo@ohsu.edu>
