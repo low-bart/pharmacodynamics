@@ -1,4 +1,5 @@
 README.md
+load_raw_binding_data_test.ipynb
 pyproject.toml
 PharmOps/__init__.py
 PharmOps/bindMods.py
@@ -7,3 +8,12 @@ PharmOps.egg-info/SOURCES.txt
 PharmOps.egg-info/dependency_links.txt
 PharmOps.egg-info/requires.txt
 PharmOps.egg-info/top_level.txt
+sample data/011224_CB1 BIND ANALYSIS NVW.xlsx
+sample data/20240208_1.xlsx
+sample data/20241115_Delta-9-THC_CB1_Binding-Affinity.prism
+sample data/20241115_Delta-9-THC_CB1_Binding-Affinity_Template.xlsx
+sample data/20241115_Delta-9-THC_CB1_Functional-Activity.prism
+sample data/20241115_Delta-9-THC_EC50-Table.xlsx
+sample data/20241115_Delta-9-THC_KI Table.xlsx
+sample data/Binding Template for RAW transformations.xlsx
+sample data/testH5.h5
