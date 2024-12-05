@@ -1,0 +1,27 @@
+[build-system]
+# Minimum requirements for the build system to execute.
+requires = ["setuptools >= 61.0", "wheel"]  # PEP 508 specifications.
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PharmOps"
+dynamic = ["version"]
+requires-python = ">=3.9"
+authors = [
+    {name = "Lowell Bartlett", email = "bartlelo@ohsu.edu}
+]
+maintainers = [
+    {name = "Lowell Bartlett", email = "bartlelo@ohsu.edu}
+]
+description = "A package to process 96-well plate pharmacology binding data"
+readme = "README.md"
+license = {text = "MIT License"}
+keywords = ["pharmacology", "binding", "kinetics", "GUI", "HDF5"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering"
+    "License :: OSI Approved :: MIT License"
+]
+[project.urls]
+Repository = "https://github.com/low-bart/pharmacodynamics.git"
