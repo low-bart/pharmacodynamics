@@ -1,1 +1,2 @@
-from .bindMods import BindData
+from .bindMods import WellData
+from .bindMods import DrugReports

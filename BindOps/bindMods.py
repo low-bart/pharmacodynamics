@@ -1,9 +1,10 @@
-class BindData:
+class WellData:
 
-    date = []
-    plate = []
-    drug = []
-    comments = []
+    date = []       # assay date
+    ctr = []        # color to right
+    plate = []      # plate number
+    drugs = []      # list of drugs on plate, one per row
+    comments = []   # list
     data = []
 
     def __init__(self, df):
@@ -11,3 +12,19 @@ class BindData:
 
     def display(self):
         print(self.data)
+        print(self.comments)
+
+    def add_comment(self, comment):
+        self.comments.append(comment)
+
+    def make_drug_report(self, row):
+        return DrugReports()
+
+class DrugReports:
+    drug = []
+    concentration = []
+    pctSpecificBinding = []
+    receptor = []
+
+    def __init__(self, wellRow, info):
+        pass
