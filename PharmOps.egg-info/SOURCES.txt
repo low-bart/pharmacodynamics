@@ -2,11 +2,12 @@ README.md
 load_raw_binding_data_test.ipynb
 pyproject.toml
 PharmOps/__init__.py
+PharmOps/__main__.py
 PharmOps/bindMods.py
+PharmOps/guitools.py
 PharmOps.egg-info/PKG-INFO
 PharmOps.egg-info/SOURCES.txt
 PharmOps.egg-info/dependency_links.txt
-PharmOps.egg-info/requires.txt
 PharmOps.egg-info/top_level.txt
 sample data/011224_CB1 BIND ANALYSIS NVW.xlsx
 sample data/20240208_1.xlsx
