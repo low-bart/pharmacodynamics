@@ -1,6 +1,6 @@
 [build-system]
 # Minimum requirements for the build system to execute.
-requires = ["setuptools", "wheel", "setuptools-scm"]  # PEP 508 specifications.
+requires = ["setuptools>=64", "wheel", "setuptools-scm>=8"]  # PEP 508 specifications.
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,11 +22,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
     "License :: OSI Approved :: MIT License"    
-]
-
-[project.optional-dependencies]
-dev = [
-    "jupyter"
 ]
 
 [project.urls]

@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: PharmOps
-Version: 0.1.1.post0+dirty
+Version: 0.1.1.post1+dirty
 Summary: A package to process 96-well plate pharmacology binding data
 Author-email: Lowell Bartlett <bartlelo@ohsu.edu>
 Maintainer-email: Lowell Bartlett <bartlelo@ohsu.edu>
@@ -13,8 +13,6 @@ Classifier: Topic :: Scientific/Engineering
 Classifier: License :: OSI Approved :: MIT License
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
-Provides-Extra: dev
-Requires-Dist: jupyter; extra == "dev"
 
 # pharmacodynamics
 Hosts python code for a GUI-based data storage and processing pipeline of pharmacological data.
