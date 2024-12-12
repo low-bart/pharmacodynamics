@@ -1,24 +1,21 @@
 import numpy as np
 
 class AssayMetadata:
-    drug = []
     date = []
     ctr = []
     plate = []
+    receptor = []
 
     def __init__(self):
         pass
 
 class WellData:
-
-    ctr = []        # color to right
-    plate = []      # plate number
+    metadata = AssayMetadata()
     drugs = []      # list of drugs on plate, one per two rows
     comments = []   # list
     data = []       # well plate data
     totals = []     # well plate totals with no drug
     nsb = []        # well plate non-specific binding
-    metadata = AssayMetadata()
 
     def __init__(self, df):
         self.data = df.loc[df.index[0:8], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
@@ -41,6 +38,8 @@ class WellData:
 
 
 class DrugReports:
+    metadata = AssayMetadata()
+    drug = []
     average = []
     specific = []
     concentration = []
@@ -49,18 +48,19 @@ class DrugReports:
     averageSpecific = []
     specificBound = []
     pctSpecificBinding = []
-    metadata = AssayMetadata()
 
     def __init__(self, wellData, index):
-        self.metadata.drug = wellData.drugs[index]
-        self.metadata.date = wellData.date
-        self.metadata.ctr = wellData.ctr
-        self.metadata.plate = wellData.plate
+        self.drug = wellData.drugs[index]
+        self.metadata = wellData.metadata
         # isolate rows by index
         startRow = (index) * 2
         endRow = startRow + 2
         drugData = wellData.data.iloc[startRow:endRow]
-        plateNSB = drugData.loc[drugData.index[0:8], 2]
-        plateTotals = drugData.loc[drugData.index[0:8], [1, 12]]
-        self.averageSpecific = np.average(plateTotals)
-        print(plateTotals)
+        self.averageSpecific = np.average(wellData.totals)
+        testData = drugData.loc[drugData.index[:], [3, 4, 5, 6, 7, 8, 9, 10, 11]]
+        print(testData)
+        self.average = [testData.mean(axis=0)]
+        self.specific = [x - wellData.nsb for x in self.average]
+        specificBound = wellData.totals - wellData.nsb
+        self.pctTotal = [x * 100 / specificBound for x in self.specific]
+        print(drugData)

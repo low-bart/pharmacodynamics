@@ -3,7 +3,7 @@ from tkinter import ttk
 import pandas as pd
 import PharmOps
 
-def load_WellData(filepath):
+def read_WellData(filepath):
     rawData = pd.read_excel(filepath)
     loadedData = PharmOps.WellData(rawData)
     return loadedData
@@ -21,7 +21,7 @@ def initialize_GUI(filepath):
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
     # WellData
-    currentObj = load_WellData('sample data\\Binding Template for RAW transformations.xlsx')
+    currentObj = read_WellData('sample data\\Binding Template for RAW transformations.xlsx')
     tree = ttk.Treeview(mainframe, columns=list(currentObj.data.columns), show="headings")
     tree.grid(row=0, column=0, sticky="N, S, E, W")
 
