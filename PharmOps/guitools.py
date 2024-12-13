@@ -9,14 +9,42 @@ def read_WellData(filepath):
     return loadedData
 
 
-def initialize_GUI(filepath):
+def initialize_GUI():
     # root properties
     root = tk.Tk()
     root.title("Pharmacodynamics GUI")
+    root.geometry("300x200")
+    appStyle = ttk.Style()
+    appStyle.configure("Custom.TFrame", background="lightblue")
+    topFrame = ttk.Frame(root, style="Custom.TFrame")
+    topFrame['borderwidth'] = 10
+    topFrame['relief'] = 'groove'
+    topFrame.grid(row=0, column=0, sticky="N, S, E, W", padx=5, pady=5)
+    bottomFrame = ttk.Frame(root, style="Custom.TFrame")
+    bottomFrame['borderwidth'] = 10
+    bottomFrame['relief'] = 'groove'
+    bottomFrame.grid(row=1, column=0, sticky="N, S, E, W", padx=5, pady=5)
+
+
+    addButton = ttk.Button(root, text="Add new well data", command=lambda: load_WellData_GUI('sample data\\Binding Template for RAW transformations.xlsx'))
+    root.grid_rowconfigure(0, weight=1)
+    root.grid_columnconfigure(0, weight=1)
+    addButton.grid(row=0, column=0)
+
+    loadButton = ttk.Button(root, text="Load saved DrugReports")
+    root.grid_rowconfigure(1, weight=1)
+    loadButton.grid(row=1, column=0)
+
+    root.mainloop()
+
+def load_WellData_GUI(filepath):
+    # root properties
+    root = tk.Tk()
+    root.title("Load new well plate data")
     root.geometry("625x300")
     mainframe = ttk.Frame(root)
     mainframe['borderwidth'] = 10
-    mainframe['relief'] = 'sunken'
+    mainframe['relief'] = 'raised'
     mainframe.grid(row=0, column=0, sticky="N, S, E, W", padx=5, pady=5)
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
@@ -48,3 +76,13 @@ def initialize_GUI(filepath):
     button = ttk.Button(root, text="Click me")
     button.grid(row=2, column=0, sticky="W", padx=5, pady=5)
     root.mainloop()
+
+def view_DrugReports_GUI(filepath):
+    root = tk.Tk()
+    root.title("Browse DrugReports")
+    root.geometry("625x300")
+    mainframe = ttk.Frame(root)
+    mainframe['borderwidth'] = 10
+    mainframe['relief'] = 'raised'
+    mainframe.grid(row=0, column=0, sticky="N, S, E, W", padx=5, pady=5)
+    root.grid_rowconfigure(0, weight=1)

@@ -35,6 +35,12 @@ class WellData:
 
     def make_drug_report(self, index):
         return DrugReports(self, index)
+    
+    def make_all_drug_reports(self):
+        reports = []
+        for i in range(4):
+            reports.append(DrugReports(self, i))
+        return reports
 
 
 class DrugReports:
@@ -61,6 +67,6 @@ class DrugReports:
         print(testData)
         self.average = [testData.mean(axis=0)]
         self.specific = [x - wellData.nsb for x in self.average]
-        specificBound = wellData.totals - wellData.nsb
-        self.pctTotal = [x * 100 / specificBound for x in self.specific]
+        self.specificBound = wellData.totals - wellData.nsb
+        self.pctTotal = [x * 100 / self.specificBound for x in self.specific]
         print(drugData)
