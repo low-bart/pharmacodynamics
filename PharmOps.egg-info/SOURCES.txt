@@ -1,10 +1,12 @@
 README.md
+bindingApp.drawio
 load_raw_binding_data_test.ipynb
 pyproject.toml
 PharmOps/__init__.py
 PharmOps/__main__.py
 PharmOps/bindMods.py
 PharmOps/guitools.py
+PharmOps/io.py
 PharmOps.egg-info/PKG-INFO
 PharmOps.egg-info/SOURCES.txt
 PharmOps.egg-info/dependency_links.txt
