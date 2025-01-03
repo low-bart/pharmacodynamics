@@ -25,6 +25,7 @@ def save_new_h5(drugRep, filepath):
         if metadata.attrs["version"] != currentVersion:
             print("Warning: version mismatch. Contents from older version may not load properly.")
         metadata.attrs["version"] = currentVersion
+        
 def load_h5_DrugReports(drugName, receptorName, filepath):
     with h5py.File(filepath, "r") as h5file:
         if drugName not in h5file:
