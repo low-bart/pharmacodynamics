@@ -1,4 +1,3 @@
-import bindMods
 from guitools import *
 from platformdirs import user_data_dir
 import os

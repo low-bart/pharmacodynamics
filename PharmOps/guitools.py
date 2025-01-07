@@ -1,11 +1,16 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import Event, ttk
+from tkintertable import TableCanvas
+from PharmOps import WellData
+from PharmOps import io
 import pandas as pd
-import PharmOps
+import h5py
+
+
 
 def read_WellData(filepath):
     rawData = pd.read_excel(filepath)
-    loadedData = PharmOps.WellData(rawData)
+    loadedData = WellData(rawData)
     return loadedData
 
 
@@ -31,7 +36,7 @@ def initialize_GUI():
     root.grid_columnconfigure(0, weight=1)
     addButton.grid(row=0, column=0)
 
-    loadButton = ttk.Button(root, text="Load saved DrugReports")
+    loadButton = ttk.Button(root, text="Load saved DrugReports", command=lambda: view_DrugReports_GUI('sample data\\testH5.h5'))
     root.grid_rowconfigure(1, weight=1)
     loadButton.grid(row=1, column=0)
 
@@ -41,6 +46,7 @@ def load_WellData_GUI(filepath):
     # root properties
     root = tk.Tk()
     root.title("Load new well plate data")
+    '''
     root.geometry("625x300")
     mainframe = ttk.Frame(root)
     mainframe['borderwidth'] = 10
@@ -48,37 +54,25 @@ def load_WellData_GUI(filepath):
     mainframe.grid(row=0, column=0, sticky="N, S, E, W", padx=5, pady=5)
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
+    '''
     # WellData
     currentObj = read_WellData('sample data\\Binding Template for RAW transformations.xlsx')
-    tree = ttk.Treeview(mainframe, columns=list(currentObj.data.columns), show="headings")
-    tree.grid(row=0, column=0, sticky="N, S, E, W")
+    dataDict = currentObj.data.to_dict(orient='index')
+    dataDict = {row_key: {str(col_key): value for col_key, value in col_values.items()} 
+            for row_key, col_values in dataDict.items()}
 
-    for col in currentObj.data.columns:
-        tree.heading(col, text=col)
-        tree.column(col, width=100, anchor=tk.CENTER)
-
-    for _, row in currentObj.data.iterrows():
-        tree.insert("", tk.END, values=list(row))
-
-    mainframe.grid_rowconfigure(0, weight=1)
-    mainframe.grid_columnconfigure(0, weight=1)
-
-    scroll_x = ttk.Scrollbar(mainframe, orient=tk.HORIZONTAL, command=tree.xview)
-    scroll_x.grid(row=1, column=0, sticky="E, W")
-    scroll_y = ttk.Scrollbar(mainframe, orient=tk.VERTICAL, command=tree.yview)
-    scroll_y.grid(row=0, column=1, sticky="N, S")
-
-    tree.configure(xscrollcommand=scroll_x.set, yscrollcommand=scroll_y.set)
-
-    label = ttk.Label(root, text="more text")
-    label.grid(row=1, column=0, sticky="W", padx=5, pady=5)
-
-    button = ttk.Button(root, text="Click me")
-    button.grid(row=2, column=0, sticky="W", padx=5, pady=5)
+    tableFrame = tk.Frame(root)
+    tableFrame.pack()
+    print(dataDict)
+    print(type(dataDict))
+    table = TableCanvas(tableFrame, data=dataDict)
+    table.show()
+    table.bind("<Button-1>", lambda event: on_cell_click(event, table))    
     root.mainloop()
 
 def view_DrugReports_GUI(filepath):
     root = tk.Tk()
+
     root.title("Browse DrugReports")
     root.geometry("625x300")
     mainframe = ttk.Frame(root)
@@ -86,3 +80,52 @@ def view_DrugReports_GUI(filepath):
     mainframe['relief'] = 'raised'
     mainframe.grid(row=0, column=0, sticky="N, S, E, W", padx=5, pady=5)
     root.grid_rowconfigure(0, weight=1)
+    with h5py.File(filepath, "r") as f:
+        alist = []
+        ls = list(f.keys())
+        print('List of datasets: \n', ls)
+        clicked = tk.StringVar() 
+  
+        # initial menu text 
+        clicked.set("Select a dataset")
+        
+        # Create Dropdown menu 
+        drop = tk.OptionMenu( root , clicked , *ls, command=lambda value: drug_selected(clicked, filepath)) 
+        drop.grid(row=0, column=0, sticky="N, S, E, W", padx=5, pady=5) 
+          
+def drug_selected(selectedVal, h5File):
+    with h5py.File(h5File, "r") as f:
+        ls = list(f.keys())
+        print(ls)
+        g = selectedVal.get()
+        print(g)
+
+def on_cell_click(event, table):
+    # Get the clicked cell position (row, col)
+    row_clicked = table.get_row_clicked(event)
+    
+    # Ensure the row is within bounds
+    if row_clicked is None:
+        print("Click was outside table rows.")
+        return
+    
+    # Retrieve column names
+    column_names = table.model.columnNames
+    num_columns = len(column_names)
+    
+    # Calculate which column was clicked
+    col_width = table.cellwidth
+    x_position = event.x
+    col_clicked = x_position // col_width  # Determine column index
+    
+    # Ensure the column index is within bounds
+    if 0 <= col_clicked < num_columns:
+        col_name = column_names[col_clicked]
+        print(f"Row: {row_clicked}, Column: {col_clicked} ({col_name})")
+        
+        # Fetch the value using the column name
+        cell_value = table.model.data[row_clicked][col_name]
+        print(f"Cell Value: {cell_value}")
+    else:
+        print("Click was outside table columns.")
+  
