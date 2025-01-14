@@ -70,3 +70,5 @@ class DrugReports:
         self.specificBound = wellData.totals - wellData.nsb
         self.pctTotal = [x * 100 / self.specificBound for x in self.specific]
         print(drugData)
+        print(self.average)
+        print(self.specific)
