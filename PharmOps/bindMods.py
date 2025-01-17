@@ -5,17 +5,20 @@ class AssayMetadata:
     ctr = []
     plate = []
     receptor = []
+    h5Path = []
+    rawDataPath = []
 
     def __init__(self):
         pass
 
 class WellData:
     metadata = AssayMetadata()
-    drugs = []      # list of drugs on plate, one per two rows
-    comments = []   # list
-    data = []       # well plate data
-    totals = []     # well plate totals with no drug
-    nsb = []        # well plate non-specific binding
+    drugs = []          # list of drugs on plate, one per two rows
+    comments = []       # list
+    data = []           # well plate data
+    totals = []         # well plate totals with no drug
+    nsb = []            # well plate non-specific binding
+    highestConc = []    # log [drug]
 
     def __init__(self, df):
         self.data = df.loc[df.index[0:8], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
@@ -42,6 +45,17 @@ class WellData:
             reports.append(DrugReports(self, i))
         return reports
 
+    def update_drugs(self, drugName, idx):
+        while len(self.drugs) <= idx:
+            self.drugs.append(None)
+        self.drugs[idx] = drugName
+
+    def update_conc(self, highestConc, idx):
+        while len(self.highestConc) <= idx:
+            self.highestConc.append(None)
+        self.highestConc[idx] = highestConc
+
+
 
 class DrugReports:
     metadata = AssayMetadata()
@@ -64,11 +78,7 @@ class DrugReports:
         drugData = wellData.data.iloc[startRow:endRow]
         self.averageSpecific = np.average(wellData.totals)
         testData = drugData.loc[drugData.index[:], [3, 4, 5, 6, 7, 8, 9, 10, 11]]
-        print(testData)
         self.average = [testData.mean(axis=0)]
         self.specific = [x - wellData.nsb for x in self.average]
         self.specificBound = wellData.totals - wellData.nsb
         self.pctTotal = [x * 100 / self.specificBound for x in self.specific]
-        print(drugData)
-        print(self.average)
-        print(self.specific)
