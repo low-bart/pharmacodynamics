@@ -4,27 +4,32 @@ import pandas as pd
 import numpy as np
 import PharmOps
 from importlib.metadata import version
+from platformdirs import user_data_dir
+import os
 def read_raw_well_csv(filepath):
     rawData = pd.read_excel(filepath)
     rawWellValues = rawData.loc[rawData.index[0:8], range(1, 12)]    
     return rawWellValues
 
+def get_default_h5_path(appName="PharmOps", fileName="data_store.h5"):
+    # Determine the platform-specific data directory
+    data_dir = user_data_dir(appName, appauthor=False)
+    os.makedirs(data_dir, exist_ok=True)  # Ensure the directory exists
+    return os.path.join(data_dir, fileName)
+
 def save_new_h5(drugRep, filepath):
     serializedObj = pickle.dumps(drugRep)
     serializedArray = np.frombuffer(serializedObj, dtype='uint8')
     drugName = drugRep.drug
-    receptorName = drugRep.receptor
+    receptorName = drugRep.metadata.receptor
     with h5py.File(filepath, "a") as h5file:
         group = h5file.require_group(drugName)
         if receptorName in group:
             print(f"Receptor '{receptorName}' already exists for drug '{drugName}'")
             return
-        group.create_dataset(receptorName, data=serializedArray)
-        metadata = h5file.require_group("metadata")
+        grp = group.create_dataset(receptorName, data=serializedArray)
         currentVersion = version("PharmOps")
-        if metadata.attrs["version"] != currentVersion:
-            print("Warning: version mismatch. Contents from older version may not load properly.")
-        metadata.attrs["version"] = currentVersion
+        group.attrs["version"] = currentVersion
         
 def load_h5_DrugReports(drugName, receptorName, filepath):
     with h5py.File(filepath, "r") as h5file:
