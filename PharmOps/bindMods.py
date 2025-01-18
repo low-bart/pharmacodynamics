@@ -77,7 +77,7 @@ class DrugReports:
         endRow = startRow + 2
         drugData = wellData.data.iloc[startRow:endRow]
         self.averageSpecific = np.average(wellData.totals)
-        testData = drugData.loc[drugData.index[:], [3, 4, 5, 6, 7, 8, 9, 10, 11]]
+        testData = drugData.loc[drugData.index[:], [3, 4, 5, 6, 7, 8, 9, 10, 11]].values
         self.average = [testData.mean(axis=0)]
         self.specific = [x - wellData.nsb for x in self.average]
         self.specificBound = wellData.totals - wellData.nsb

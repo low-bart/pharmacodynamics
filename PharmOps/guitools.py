@@ -166,39 +166,65 @@ def load_WellData_GUI(filepath):
     root.mainloop()
 
 
+def update_datasets(event, drugCombobox, dataset, combobox):
+    selected_group = drugCombobox.get()
+    print(f"Selected Drug: '{selected_group}'")  # Debugging line to check the value
+    if selected_group:  # Ensure a drug is selected
+        # Get the datasets for the selected drug (group)
+        new_keys = list(dataset[selected_group].keys())  # Sub-datasets for the selected group
+        combobox['values'] = new_keys  # Update second dropdown values
+        combobox.set('')  # Clear any previously selected receptor
+    else:
+        print("No drug selected.")
+
+def update_DrugReports_GUI(event, drugName, receptorName, filepath, root):
+    drugName = drugName.get()
+    receptorName = receptorName.get()
+    currentDrugReport = io.load_h5_DrugReports(drugName, receptorName, filepath)
+    print(currentDrugReport.specific)
+    print(type(currentDrugReport.specific))
+    tree = ttk.Treeview(root, columns=currentDrugReport.specific, show="headings")
+    for row in currentDrugReport.specific:
+        tree.insert("", "end", values=(row,))
+    tree.grid(row=2, column=0)
 
 def view_DrugReports_GUI(filepath):
+    # Open the file and keep it open for the lifetime of the program
+    f = h5py.File(filepath, "r")
+    drugs = list(f.keys())  # Get the top-level groups (drugs)
+    print('List of drugs (groups): \n', drugs)
+    # Prepare a dictionary of groups and their sub-datasets for later use
+    dataset = {drug: f[drug] for drug in drugs}
+
+    # Start GUI
     root = tk.Tk()
     root.title("Browse DrugReports")
     root.geometry("625x300")
     mainframe = ttk.Frame(root)
-    mainframe['borderwidth'] = 10
-    mainframe['relief'] = 'raised'
-    mainframe.grid(row=0, column=0, sticky="N, S, E, W", padx=5, pady=5)
+    mainframe.grid(row=0, column=0, padx=5, pady=5)
     root.grid_rowconfigure(0, weight=1)
-    with h5py.File(filepath, "r") as f:
-        alist = []
-        ls = list(f.keys())
-        print('List of datasets: \n', ls)
-        clicked = tk.StringVar() 
-    
-        # initial menu text 
-        clicked.set("Select a drug: ")
-        
-        clicked2 = tk.StringVar()
-        clicked2.set("Select a receptor: ")
 
-        # Create Dropdown menu 
-        drugLabel = tk.Label(root, text="Select a drug: ")
-        drugLabel.grid(row=0, column=0, sticky="E")
-        drop = tk.ComboBox(root, clicked, *ls, command=lambda value: drug_selected(clicked, filepath)) 
-        drop.grid(row=0, column=2, sticky="W") 
-        receptorLabel = tk.Label(root, text="Select a receptor: ")
-        receptorLabel.grid(row=1, column=0, sticky="E")
-        drop2 = tk.OptionMenu(root, clicked2, *list(f[clicked].keys()), command=lambda value: receptor_selected(clicked.get(), clicked2, filepath))
-        drop2.grid(row=1, column=2, sticky="W")
+    clicked = tk.StringVar()  # StringVar for drug selection
+    
+    # Create Dropdown menu for drug selection
+    drugLabel = tk.Label(root, text="Select a drug: ")
+    drugLabel.grid(row=0, column=0, sticky="E")
+    drop = ttk.Combobox(root, textvariable=clicked, values=drugs) 
+    drop.grid(row=0, column=2, sticky="W") 
+
+    receptorLabel = tk.Label(root, text="Select a receptor: ")
+    receptorLabel.grid(row=1, column=0, sticky="E")
+
+    clicked2 = tk.StringVar()  # StringVar for receptor selection
+    clicked2.set("Select a receptor: ")  # Initial value
+    drop2 = ttk.Combobox(root, textvariable=clicked2)
+    drop2.grid(row=1, column=2, sticky="W")
+
+    # Bind update_datasets function to combobox selection change
+    drop.bind("<<ComboboxSelected>>", lambda event: update_datasets(event, drop, dataset, drop2))
+    drop2.bind("<<ComboboxSelected>>", lambda event: update_DrugReports_GUI(event, drop, drop2, filepath, root))
     root.mainloop()
-          
+
 def drug_selected(selectedVal, h5File):
     with h5py.File(h5File, "r") as f:
         ls = list(f.keys())
@@ -207,10 +233,12 @@ def drug_selected(selectedVal, h5File):
         print(receptorsTested)
 
 def receptor_selected(selectedDrug, selectedReceptor, h5File):
+    '''
     with h5py.File(h5File, "r") as f:
         ls = list(f[selectedDrug].keys())
         print(ls)
-
+    '''
+    pass
 def on_cell_click(event, table):
     # Get the clicked cell position (row, col)
     row_clicked = table.get_row_clicked(event)
