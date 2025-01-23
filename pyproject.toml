@@ -23,6 +23,8 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "License :: OSI Approved :: MIT License"    
 ]
+dependencies = [
+]
 
 [project.urls]
 repository = "https://github.com/low-bart/pharmacodynamics.git"

@@ -5,7 +5,68 @@ from PharmOps import WellData
 from PharmOps import io
 import pandas as pd
 import h5py
+import re
 
+def read_MultiWell_txt(filepath):
+    rawData = pd.read_csv(filepath)
+    pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
+    matches = re.findall(pattern, rawData.to_string(), re.DOTALL)
+    plateData = {}
+    plateDF = {}
+    for match in matches:
+        lines = re.split('\n', match)
+        processedLines = []
+        for line in lines:
+            line = line.replace('\\t', '\t')
+            contents = line.split('\t')
+            processedLines.append(contents)
+        plateNumberMatch = re.search(r"plate (\d+)", match)
+        if plateNumberMatch:
+            plateNo = plateNumberMatch.group(1)
+            plateData[f"Plate_{plateNo}"] = processedLines
+    #print(plateData)
+    # Initialize cleaned_data dictionary to store cleaned rows
+    cleaned_data = {}
+
+    # Process each plate in plateData (assuming it's a dictionary of lists of rows)
+    for plate, rows in plateData.items():  # plateData is a dictionary
+        numeric_rows = []
+        
+        for row in rows:
+            # Extract the label from the first item in the list (strip any trailing spaces)
+            row_label = row[0].strip()[-1]  # The label should be the last character
+            
+            # Skip rows that do not have a valid label (A-H)
+            if row_label not in ["A", "B", "C", "D", "E", "F", "G", "H"]:
+                continue
+            
+            # Extract the data columns (columns 1-12)
+            data_columns = row[1:13]  # Adjust index to extract numeric columns properly
+
+            # Convert all data columns to integers, ensuring they are valid numeric strings
+            try:
+                data_columns_int = [int(value) for value in data_columns]  # Convert to int
+                numeric_rows.append(data_columns_int)  # Append the converted row
+            except ValueError:
+                # Skip rows where conversion fails (if any value is not a valid integer)
+                continue
+
+        # Convert numeric_rows to DataFrame for the current plate
+        df = pd.DataFrame(numeric_rows, columns=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+
+        # Optionally, you can set the index as the row labels (A-H) if needed:
+        df.index = [row[0].strip()[-1] for row in rows if row[0].strip()[-1] in ["A", "B", "C", "D", "E", "F", "G", "H"]]
+
+        # Store DataFrame in the cleaned_data dictionary with the plate name as key
+        cleaned_data[plate] = df
+
+
+    # Output the cleaned DataFrames
+    multiwellData = []
+    for plate, df in cleaned_data.items():
+        multiwellData.append(WellData(df, plate))
+    return multiwellData
+            
 
 
 def read_WellData(filepath):
@@ -15,11 +76,10 @@ def read_WellData(filepath):
 
 
 def initialize_GUI():
-
-
-
     # root properties
     defaultH5Path = io.get_default_h5_path()
+    defaultObject = read_WellData('sample data\\Binding Template for RAW transformations.xlsx')
+
     root = tk.Tk()
     root.title("Pharmacodynamics GUI")
     root.geometry("300x200")
@@ -35,14 +95,18 @@ def initialize_GUI():
     bottomFrame.grid(row=1, column=0, sticky="N, S, E, W", padx=5, pady=5)
 
 
-    addButton = ttk.Button(root, text="Add new well data", command=lambda: load_WellData_GUI('sample data\\Binding Template for RAW transformations.xlsx'))
+    addButton = ttk.Button(root, text="Add new well data", command=lambda: load_WellData_GUI(defaultObject))
     root.grid_rowconfigure(0, weight=1)
     root.grid_columnconfigure(0, weight=1)
     addButton.grid(row=0, column=0)
 
-    loadButton = ttk.Button(root, text="Load saved DrugReports", command=lambda: view_DrugReports_GUI(defaultH5Path))
+    addMultipleButton = ttk.Button(root, text="Add well data from txt", command=lambda: load_multiwell_GUI('sample data\\110824_raw data.txt'))
     root.grid_rowconfigure(1, weight=1)
-    loadButton.grid(row=1, column=0)
+    addMultipleButton.grid(row=1, column=0)
+
+    loadButton = ttk.Button(root, text="Load saved DrugReports", command=lambda: view_DrugReports_GUI(defaultH5Path))
+    root.grid_rowconfigure(2, weight=1)
+    loadButton.grid(row=2, column=0)
 
     root.mainloop()
 
@@ -71,13 +135,12 @@ def make_drug_reports(root, obj, drugEntries, receptor):
         print(report.drug)
         print(report.metadata.receptor)
 
-def load_WellData_GUI(filepath):
+def load_WellData_GUI(currentObj):
     # root properties
     root = tk.Tk()
     root.title("Load new well plate data")
 
     # WellData
-    currentObj = read_WellData('sample data\\Binding Template for RAW transformations.xlsx')
     dataDict = currentObj.data.to_dict(orient='index')
     dataDict = {row_key: {str(col_key): value for col_key, value in col_values.items()} 
             for row_key, col_values in dataDict.items()}
@@ -123,17 +186,12 @@ def load_WellData_GUI(filepath):
 
     makeReportButton.grid(row=6, column=2)
     def on_cell_edit(event=None):
-        """
-        Persist the updated value after editing a cell.
-        """
         if table.currentrow is not None and table.currentcol is not None:
-            row = table.currentrow  # Get the current row index
-            col = table.currentcol  # Get the current column index
-
+            row = table.currentrow
+            col = table.currentcol
             # Retrieve the value from the Entry widget
             if table.cellentry is not None:
-                updated_value = table.cellentry.get().strip()  # Use .strip() to clean up spaces
-
+                updated_value = table.cellentry.get().strip()
                 if updated_value:  # Only process non-empty values
                     # Save the updated value to the model
                     model.setValueAt(updated_value, row, col)
@@ -144,10 +202,7 @@ def load_WellData_GUI(filepath):
                     # Redraw the table to reflect the changes
                     table.redraw()
 
-    def bind_edit_events():
-        """
-        Attach FocusOut and Return bindings to the Entry widget used for editing cells.
-        """
+    def bind_edit_events(): 
         if table.cellentry is not None:
             # Bind FocusOut to handle when the user leaves the cell
             table.cellentry.bind("<FocusOut>", on_cell_edit)
@@ -165,6 +220,10 @@ def load_WellData_GUI(filepath):
     table.drawCellEntry = drawCellEntryOverride
     root.mainloop()
 
+def load_multiwell_GUI(filepath):
+    wellDataList = read_MultiWell_txt(filepath)
+    for plate in wellDataList:
+        load_WellData_GUI(plate)
 
 def update_datasets(event, drugCombobox, dataset, combobox):
     selected_group = drugCombobox.get()
@@ -183,6 +242,7 @@ def update_DrugReports_GUI(event, drugName, receptorName, filepath, root):
     currentDrugReport = io.load_h5_DrugReports(drugName, receptorName, filepath)
     print(currentDrugReport.specific)
     print(type(currentDrugReport.specific))
+
     tree = ttk.Treeview(root, columns=currentDrugReport.specific, show="headings")
     for row in currentDrugReport.specific:
         tree.insert("", "end", values=(row,))

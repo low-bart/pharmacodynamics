@@ -6,6 +6,7 @@ import PharmOps
 from importlib.metadata import version
 from platformdirs import user_data_dir
 import os
+
 def read_raw_well_csv(filepath):
     rawData = pd.read_excel(filepath)
     rawWellValues = rawData.loc[rawData.index[0:8], range(1, 12)]    
@@ -30,7 +31,7 @@ def save_new_h5(drugRep, filepath):
         grp = group.create_dataset(receptorName, data=serializedArray)
         currentVersion = version("PharmOps")
         group.attrs["version"] = currentVersion
-        
+
 def load_h5_DrugReports(drugName, receptorName, filepath):
     with h5py.File(filepath, "r") as h5file:
         if drugName not in h5file:

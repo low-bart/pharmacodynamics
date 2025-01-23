@@ -19,14 +19,17 @@ class WellData:
     totals = []         # well plate totals with no drug
     nsb = []            # well plate non-specific binding
     highestConc = []    # log [drug]
+    plateNo = []
 
-    def __init__(self, df):
-        self.data = df.loc[df.index[0:8], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
+    def __init__(self, df, plate=1):
+
+        self.data = df
         self.drugs = ["Drug1", "Drug2", "Drug3", "Drug4"]
         plateTotals = self.data.loc[self.data.index[0:8], [1, 12]]
         self.totals = np.average(plateTotals)
         plateNSB = self.data.loc[self.data.index[0:8], 2]
         self.nsb = np.average(plateNSB) 
+        self.plateNo = plate
 
     def display(self):
         print(self.data)
