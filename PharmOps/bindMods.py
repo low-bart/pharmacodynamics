@@ -22,9 +22,12 @@ class WellData:
     plateNo = []
 
     def __init__(self, df, plate=1):
-
-        self.data = df
+        if df.size == 96:
+            self.data = df
+        else:
+            self.data = df.loc[df.index[0:8], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
         self.drugs = ["Drug1", "Drug2", "Drug3", "Drug4"]
+        self.highestConc = [None, None, None, None]
         plateTotals = self.data.loc[self.data.index[0:8], [1, 12]]
         self.totals = np.average(plateTotals)
         plateNSB = self.data.loc[self.data.index[0:8], 2]
@@ -49,13 +52,10 @@ class WellData:
         return reports
 
     def update_drugs(self, drugName, idx):
-        while len(self.drugs) <= idx:
-            self.drugs.append(None)
         self.drugs[idx] = drugName
 
     def update_conc(self, highestConc, idx):
-        while len(self.highestConc) <= idx:
-            self.highestConc.append(None)
+        print(idx)
         self.highestConc[idx] = highestConc
 
 
@@ -85,3 +85,10 @@ class DrugReports:
         self.specific = [x - wellData.nsb for x in self.average]
         self.specificBound = wellData.totals - wellData.nsb
         self.pctTotal = [x * 100 / self.specificBound for x in self.specific]
+        concentrationSteps = np.linspace(0, -4, num=9, endpoint=True)
+        self.logConc = concentrationSteps + wellData.highestConc[index]
+        concCalc = lambda x: 10 ** x
+        self.concentration = concCalc(self.logConc)
+        self.average = self.average[0].tolist()
+        self.specific = self.specific[0].tolist()
+        self.pctTotal = self.pctTotal[0].tolist()

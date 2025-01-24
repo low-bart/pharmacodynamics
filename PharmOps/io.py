@@ -3,9 +3,54 @@ import h5py
 import pandas as pd
 import numpy as np
 import PharmOps
+from PharmOps import WellData
 from importlib.metadata import version
 from platformdirs import user_data_dir
 import os
+import re
+
+def read_raw_well_txt(filepath):
+    rawData = pd.read_csv(filepath)
+    pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
+    matches = re.findall(pattern, rawData.to_string(), re.DOTALL)
+    plateData = {}
+    plateDF = {}
+    rowLabels = ["A", "B", "C", "D", "E", "F", "G", "H"]
+    for match in matches:
+        lines = re.split('\n', match)
+        processedLines = []
+        for line in lines:
+            line = line.replace('\\t', '\t')
+            contents = line.split('\t')
+            processedLines.append(contents)
+        plateNumberMatch = re.search(r"plate (\d+)", match)
+        if plateNumberMatch:
+            plateNo = plateNumberMatch.group(1)
+            plateData[f"Plate_{plateNo}"] = processedLines
+
+    cleanedData = {}
+    for plate, rows in plateData.items():
+        numericRows = []
+        for row in rows:
+            rowLabel = row[0].strip()[-1]
+            if rowLabel not in rowLabels:
+                continue
+            dataColumns = row[1:13]
+            try:
+                dataColumnsInt = [int(value) for value in dataColumns]
+                numericRows.append(dataColumnsInt)
+            except ValueError:
+                continue
+
+        df = pd.DataFrame(numericRows, columns=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+        df.index = [row[0].strip()[-1] for row in rows if row[0].strip()[-1] in rowLabels]
+        cleanedData[plate] = df
+
+    wellDataObjects = []
+    for plate, df in cleanedData.items():
+        wellDataObjects.append(WellData(df, plate))
+    return wellDataObjects
+
 
 def read_raw_well_csv(filepath):
     rawData = pd.read_excel(filepath)
