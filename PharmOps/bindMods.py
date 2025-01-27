@@ -55,7 +55,6 @@ class WellData:
         self.drugs[idx] = drugName
 
     def update_conc(self, highestConc, idx):
-        print(idx)
         self.highestConc[idx] = highestConc
 
 

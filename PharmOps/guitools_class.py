@@ -71,8 +71,6 @@ class WellDataGUI:
 
     def create_drug_entry(self, parent, labelText, row, entryNo, callback):
         entryVar = tk.StringVar()
-        
-        # Properly capture index and ensure all args are handled correctly
         entryVar.trace_add("write", lambda *args: callback())
 
         label = ttk.Label(parent, text=labelText)
@@ -81,15 +79,11 @@ class WellDataGUI:
         entry = ttk.Entry(parent, textvariable=entryVar)
         entry.grid(row=row, column=(entryNo*2)-1, padx=5, pady=5, sticky="W")
 
-        return entryVar  # Store StringVar instead of entry widget
-
+        return entryVar
 
     def on_drug_change(self, index):
         new_value = self.drugEntries[index].get()
-        print(f"Drug change detected at index {index}, new value: {new_value}")
-        print(type(index), type(new_value))  # Debugging types
 
-        # Ensure index is an integer
         if isinstance(index, str):
             index = int(index)
 
@@ -98,22 +92,16 @@ class WellDataGUI:
 
     
     def on_conc_change(self, index):
-        # Update plate with new concentration information
-        print(f"Concentration change detected at index {index}, new value: {self.concentrationEntries[index].get()}")
         
         self.plate.update_conc(int(self.concentrationEntries[index].get()), index)
 
     def make_drug_reports(self):
-        # Create reports for all drugs
-        print("Making drug reports...")
         for i, entry in enumerate(self.drugEntries):
             print(f"Drug {i}: {entry.get()}")
             self.plate.update_drugs(entry.get(), i)
         
-        # Update receptor information
         self.plate.metadata.receptor = self.receptorName.get()
         
-        # Generate and save drug reports
         reports = self.plate.make_all_drug_reports()
         for report in reports:
             io.save_new_h5(report, self.h5Path)
@@ -174,10 +162,5 @@ class DrugReportsGUI:
                 currentDrugReport.logConc[i],
                 currentDrugReport.pctTotal[i]
             ))
-            print(currentDrugReport.average)
-            print(currentDrugReport.specific)
-            print(currentDrugReport.concentration)
-            print(currentDrugReport.logConc)
-            print(currentDrugReport.pctTotal)
 
 
