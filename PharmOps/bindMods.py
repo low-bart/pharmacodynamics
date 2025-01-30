@@ -11,6 +11,13 @@ class AssayMetadata:
     def __init__(self):
         pass
 
+    def display(self):
+        print(self.date)
+        print(self.ctr)
+        print(self.receptor)
+        print(self.h5Path)
+        print(self.rawDataPath)
+
 class WellData:
     metadata = AssayMetadata()
     drugs = []          # list of drugs on plate, one per two rows
@@ -57,6 +64,9 @@ class WellData:
     def update_conc(self, highestConc, idx):
         self.highestConc[idx] = highestConc
 
+    def set_date(self, dateStr):
+        self.metadata.date = dateStr
+
 
 
 class DrugReports:
@@ -74,7 +84,6 @@ class DrugReports:
     def __init__(self, wellData, index):
         self.drug = wellData.drugs[index]
         self.metadata = wellData.metadata
-        # isolate rows by index
         startRow = (index) * 2
         endRow = startRow + 2
         drugData = wellData.data.iloc[startRow:endRow]
