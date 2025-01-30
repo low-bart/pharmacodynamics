@@ -8,10 +8,20 @@ from importlib.metadata import version
 from platformdirs import user_data_dir
 import os
 import re
+from datetime import datetime
 
 def read_raw_well_txt(filepath):
     rawData = pd.read_csv(filepath)
     pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
+    datePattern = r"\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b"
+    for i in range(min(len(rawData), 10)):  # Limit to the first 5 rows
+        for col in rawData.columns:  # Iterate through columns in each row
+            cell = str(rawData.iloc[i][col])  # Convert the cell value to a string
+            match = re.search(datePattern, cell)
+            if match:
+                assayDate = match.group(0)  # Return the first matched date
+                break
+
     matches = re.findall(pattern, rawData.to_string(), re.DOTALL)
     plateData = {}
     plateDF = {}
@@ -49,6 +59,9 @@ def read_raw_well_txt(filepath):
     wellDataObjects = []
     for plate, df in cleanedData.items():
         wellDataObjects.append(WellData(df, plate))
+        print(assayDate)
+        wellDataObjects[-1].set_date(assayDate)
+        
     return wellDataObjects
 
 
@@ -68,21 +81,29 @@ def save_new_h5(drugRep, filepath):
     serializedArray = np.frombuffer(serializedObj, dtype='uint8')
     drugName = drugRep.drug
     receptorName = drugRep.metadata.receptor
+    dateStr = drugRep.metadata.date
+    print(dateStr)
+    parsedDate = datetime.strptime(dateStr, "%d-%b-%Y")
+    parsedDate = parsedDate.strftime("%Y%m%d")
     with h5py.File(filepath, "a") as h5file:
-        group = h5file.require_group(drugName)
+        group = h5file.require_group(drugName + "/" + receptorName)
+        '''
         if receptorName in group:
             print(f"Receptor '{receptorName}' already exists for drug '{drugName}'")
             return
-        grp = group.create_dataset(receptorName, data=serializedArray)
+        '''
+        grp = group.create_dataset(parsedDate, data=serializedArray)
         currentVersion = version("PharmOps")
         group.attrs["version"] = currentVersion
 
-def load_h5_DrugReports(drugName, receptorName, filepath):
+def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
     with h5py.File(filepath, "r") as h5file:
         if drugName not in h5file:
             raise KeyError(f"No drug '{drugName}' found in h5 file")
         if receptorName not in h5file[drugName]:
             raise KeyError(f"No receptor '{receptorName}' data found for '{drugName}'")
-        serializedArray = h5file[drugName][receptorName][:]
+        if dateStr not in h5file[drugName][receptorName]:
+            raise KeyError(f"No assay on '{dateStr}' for drug '{drugName}' and receptor '{receptorName}'")
+        serializedArray = h5file[drugName][receptorName][dateStr][:]
     loadedRawData = pickle.loads(serializedArray.tobytes())
     return loadedRawData
