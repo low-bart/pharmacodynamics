@@ -46,8 +46,10 @@ class WellData:
 
     def display(self):
         print(self.data)
-        print(self.comments)
-        print(self.drugs)
+        for c in self.comments:
+            print(c)
+        for d in self.drugs:
+            print(d)
 
     def add_comment(self, comment):
         self.comments.append(comment)
