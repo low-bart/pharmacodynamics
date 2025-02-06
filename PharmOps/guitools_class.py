@@ -22,6 +22,43 @@ class BindingGUI:
                                                command=self.load_DrugReports)
         self.loadDrugReportsButton.pack()
 
+    def get_user_info(self):
+        userInfo = tk.Toplevel(self.main)
+        userName = tk.StringVar(userInfo)
+        latestComment = tk.StringVar(userInfo)
+        usernameLabel = tk.Label(userInfo, text="Enter your name: ")
+        usernameEntry = tk.Entry(userInfo, textvariable=userName)
+        userComment = tk.Entry(userInfo, textvariable=latestComment)
+        self.entriesComplete = False
+        userComments = []
+
+        def add_comment(comment):
+            if comment.get() != "":
+                userComments.append(comment.get())
+                userComment.delete(0, 'end')
+            for co in userComments:
+                print(co)
+
+        def on_closing_user_info():
+            userInfo.destroy()
+            userInfo.update()
+            self.entriesComplete = False
+
+        def submit_user_info():
+            userInfo.destroy()
+            userInfo.update()
+            self.entriesComplete = True
+
+        userInfo.protocol("WM_DELETE_WINDOW", on_closing_user_info)
+        submitComment = tk.Button(userInfo, text="Add comment", command=lambda: add_comment(userComment))
+        completeForm = tk.Button(userInfo, text="Submit", command=submit_user_info)        
+        usernameLabel.grid(row=0, column=0)
+        usernameEntry.grid(row=0, column=1)
+        userComment.grid(row=1, column=1)
+        submitComment.grid(row=1, column=0)
+        completeForm.grid(row=2, column=0, columnspan=2)
+        self.main.wait_window(userInfo)
+
     def load_WellData(self):
         fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
                                               title='Select a file', 
@@ -32,7 +69,8 @@ class BindingGUI:
         wellDataList = io.read_raw_well_txt(fileName)
         numPlates = len(wellDataList)
         countPlate, multFactor = self.choose_count_plate(numPlates)
-        if countPlate == 0 or multFactor == 0:
+        self.get_user_info()
+        if not countPlate or not multFactor or not self.entriesComplete:
             return
         countData = wellDataList[countPlate-1].data
         radioactivity = 0
@@ -57,7 +95,7 @@ class BindingGUI:
             plateStrings.append(str(plate))
         self.countWindowClosed=False
 
-        def on_closing_plateSelection():
+        def on_closing_plate_selection():
             selectedPlate=0
             multiplicationFactor=0
             plateSelectWindow.destroy()
@@ -78,7 +116,7 @@ class BindingGUI:
             plateSelectWindow.destroy()
             plateSelectWindow.update()
 
-        plateSelectWindow.protocol("WM_DELETE_WINDOW", on_closing_plateSelection)
+        plateSelectWindow.protocol("WM_DELETE_WINDOW", on_closing_plate_selection)
         plateLabel = tk.Label(plateSelectWindow, text="Select the count plate: ")
         plateLabel.grid(row=0, column=0, sticky="E")
         plateDropdown = tk.OptionMenu(plateSelectWindow, selectedPlate, *plateStrings)
@@ -135,14 +173,20 @@ class WellDataGUI:
         self.receptorName = ttk.Entry(self.main)
         self.receptorName.grid(row=5, column=1, sticky="W")
         makeReportButton = ttk.Button(self.main, text="Make new drug reports", command=self.make_drug_reports)
-        makeReportButton.grid(row=5, column=2, columnspan=2)
+        makeReportButton.grid(row=7, column=1, columnspan=2)
         self.h5Path = io.get_default_h5_path()
-            
+        self.recentComment = tk.StringVar(self.main)
+        addCommentButton = ttk.Button(self.main, 
+                                  text="Add comment", 
+                                  command=lambda: self.add_comment(self.recentComment.get()))
+        self.recentCommentField = ttk.Entry(self.main, textvariable=self.recentComment)
+        addCommentButton.grid(row=6, column=1)
+        self.recentCommentField.grid(row=6, column=2)
         def on_resize(event):
-            table_width = event.width
-            column_width = self.table.cellwidth
-            max_visible_columns = max(1, table_width // column_width)
-            self.table.model.columnWidths = [column_width] * max_visible_columns
+            tableWidth = event.width
+            columnWidth = self.table.cellwidth
+            maxVisibleCols = max(1, tableWidth // columnWidth)
+            self.table.model.columnWidths = [columnWidth] * maxVisibleCols
             self.table.redraw()
 
         self.frame.bind("<Configure>", on_resize)
@@ -154,6 +198,11 @@ class WellDataGUI:
         for i, labelText in enumerate(self.concentrationLabels):
             concEntry = self.create_drug_entry(self.main, labelText, i + 1, 2)
             self.concentrationEntries.append(concEntry)
+
+    def add_comment(self, comment):
+        print("comment added")
+        self.plate.add_comment(comment)
+        self.plate.display()
 
     def create_drug_entry(self, parent, labelText, row, entryNo):
         entryVar = tk.StringVar()
@@ -174,7 +223,7 @@ class WellDataGUI:
         self.main.update()
     
     def validate_user_input(self):
-        floatReg ="\d+\.\d+|(?<=angle\s)\d+"
+        floatReg ="\d+\.\d+|(?<=angle\s)\d+"    # cursed regular expression to validate float or int
         for entry in self.concentrationEntries:
             try: 
                 float(entry.get())
