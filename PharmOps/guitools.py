@@ -51,17 +51,10 @@ def read_MultiWell_txt(filepath):
                 # Skip rows where conversion fails (if any value is not a valid integer)
                 continue
 
-        # Convert numeric_rows to DataFrame for the current plate
         df = pd.DataFrame(numeric_rows, columns=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
-
-        # Optionally, you can set the index as the row labels (A-H) if needed:
         df.index = [row[0].strip()[-1] for row in rows if row[0].strip()[-1] in ["A", "B", "C", "D", "E", "F", "G", "H"]]
-
-        # Store DataFrame in the cleaned_data dictionary with the plate name as key
         cleaned_data[plate] = df
-
-
-    # Output the cleaned DataFrames
+        
     multiwellData = []
     for plate, df in cleaned_data.items():
         multiwellData.append(WellData(df, plate))
@@ -76,7 +69,6 @@ def read_WellData(filepath):
 
 
 def initialize_GUI():
-    # root properties
     defaultH5Path = io.get_default_h5_path()
     defaultObject = read_WellData('sample data\\Binding Template for RAW transformations.xlsx')
 

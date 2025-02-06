@@ -59,6 +59,15 @@ class BindingGUI:
         completeForm.grid(row=2, column=0, columnspan=2)
         self.main.wait_window(userInfo)
 
+    def calculate_specific_activity(self, countPlate):
+        filteredData = countPlate[countPlate > 100]
+        averageCounts = filteredData.mean().mean()
+        print(averageCounts)
+        print(filteredData)
+        for index, row in countPlate.iterrows():
+            print(row)
+        # return ci, cpm, ml
+    
     def load_WellData(self):
         fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
                                               title='Select a file', 
@@ -73,7 +82,8 @@ class BindingGUI:
         if not countPlate or not multFactor or not self.entriesComplete:
             return
         countData = wellDataList[countPlate-1].data
-        radioactivity = 0
+        self.calculate_specific_activity(countData)
+        # ci, cpm, ml = self.calculate_specific_activity(countData)
         for num, plate in enumerate(wellDataList):
             if num == countPlate-1:
                 continue
