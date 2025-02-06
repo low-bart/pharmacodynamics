@@ -29,7 +29,6 @@ dependencies = [
 "h5py",
 "platformdirs", 
 "importlib-metadata", 
-"tkinter",
 "tkintertable"
 ]
 
