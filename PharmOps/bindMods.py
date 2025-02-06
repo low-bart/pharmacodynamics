@@ -20,13 +20,16 @@ class AssayMetadata:
 
 class WellData:
     metadata = AssayMetadata()
-    drugs = []          # list of drugs on plate, one per two rows
-    comments = []       # list
-    data = []           # well plate data
-    totals = []         # well plate totals with no drug
-    nsb = []            # well plate non-specific binding
-    highestConc = []    # log [drug]
-    plateNo = []
+    drugs=[]                # list of drugs on plate, one per two rows
+    comments=[]             # list
+    data=[]                 # well plate data
+    totals=[]               # well plate totals with no drug
+    nsb=[]                  # well plate non-specific binding
+    highestConc=[]          # log [drug]
+    plateNo=[]              
+    specificActivityCi=[]   
+    specificActivityCpm=[]  
+    volMl=[]                
 
     def __init__(self, df, plate=1):
         if df.size == 96:
@@ -63,6 +66,9 @@ class WellData:
 
     def update_conc(self, highestConc, idx):
         self.highestConc[idx] = highestConc
+
+    def update_receptor(self, receptorName):
+        self.metadata.receptor = receptorName
 
     def set_date(self, dateStr):
         self.metadata.date = dateStr
