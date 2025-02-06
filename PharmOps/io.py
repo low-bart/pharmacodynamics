@@ -13,13 +13,13 @@ from datetime import datetime
 def read_raw_well_txt(filepath):
     rawData = pd.read_csv(filepath)
     pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
-    datePattern = r"\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b"
-    for i in range(min(len(rawData), 10)):  # Limit to the first 5 rows
-        for col in rawData.columns:  # Iterate through columns in each row
-            cell = str(rawData.iloc[i][col])  # Convert the cell value to a string
+    datePattern = r"\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b"    # for regex to find the date
+    for i in range(min(len(rawData), 10)):              # limit to the first 10 rows
+        for col in rawData.columns:  
+            cell = str(rawData.iloc[i][col])
             match = re.search(datePattern, cell)
             if match:
-                assayDate = match.group(0)  # Return the first matched date
+                assayDate = match.group(0)              # return the first matched date
                 break
 
     matches = re.findall(pattern, rawData.to_string(), re.DOTALL)
@@ -59,7 +59,6 @@ def read_raw_well_txt(filepath):
     wellDataObjects = []
     for plate, df in cleanedData.items():
         wellDataObjects.append(WellData(df, plate))
-        print(assayDate)
         wellDataObjects[-1].set_date(assayDate)
         
     return wellDataObjects
