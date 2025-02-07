@@ -59,14 +59,12 @@ class BindingGUI:
         completeForm.grid(row=2, column=0, columnspan=2)
         self.main.wait_window(userInfo)
 
-    def calculate_specific_activity(self, countPlate):
+    def calculate_specific_activity(self, countPlate, multFactor):
         filteredData = countPlate[countPlate > 100]
         averageCounts = filteredData.mean().mean()
-        print(averageCounts)
-        print(filteredData)
+        self.cpmAdded = averageCounts * multFactor
         for index, row in countPlate.iterrows():
             print(row)
-        # return ci, cpm, ml
     
     def load_WellData(self):
         fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
@@ -82,8 +80,8 @@ class BindingGUI:
         if not countPlate or not multFactor or not self.entriesComplete:
             return
         countData = wellDataList[countPlate-1].data
-        self.calculate_specific_activity(countData)
-        # ci, cpm, ml = self.calculate_specific_activity(countData)
+        self.calculate_specific_activity(countData, multFactor)
+
         for num, plate in enumerate(wellDataList):
             if num == countPlate-1:
                 continue
@@ -95,7 +93,10 @@ class BindingGUI:
         plateSelectWindow = tk.Toplevel(self.main)
         selectedPlate = tk.StringVar(self.main)
         volumeAdded = tk.StringVar(self.main)
+        specificActivity = tk.StringVar(self.main)
+        self.specificActivityCpm = []
         volumeEntry = tk.Entry(plateSelectWindow, textvariable=volumeAdded)
+        specificActivityEntry = tk.Entry(plateSelectWindow, textvariable=specificActivity)
         defaultVal = "Choose a plate"
         selectedPlate.set(defaultVal)
         multiplicationFactor = tk.IntVar(self.main)
@@ -114,14 +115,23 @@ class BindingGUI:
 
         def confirm_count_plate():
             try:
-                volume = float(volumeEntry.get())
-                if volume <= 0:
+                self.volumeAdded = float(volumeEntry.get())
+                if self.volumeAdded <= 0:
                     raise Exception()
             except:
-                volume = 0
+                self.volumeAdded = 0
                 print("Please enter a valid volume in mL, with only positive numbers containing at most one decimal")
-            if multiplicationFactor.get() == 0 or selectedPlate.get() == defaultVal or not volume:
-                print("Please ensure you have selected the count plate and the multiplication factor, and have entered the volume of radioligand added.")
+            try:
+                specificActivityCi = float(specificActivity.get())
+                if specificActivityCi <= 0:
+                    raise Exception()
+                self.specificActivityCpm = specificActivityCi * 2200 * 0.53
+            except:
+                self.specificActivityCpm = 0
+                print("Enter a valid positive specific activity in Ci/pmol")
+                return
+            if multiplicationFactor.get() == 0 or selectedPlate.get() == defaultVal or not self.volumeAdded:
+                print("Please ensure you have selected the count plate and the multiplication factor.")
                 return
             plateSelectWindow.destroy()
             plateSelectWindow.update()
@@ -137,11 +147,14 @@ class BindingGUI:
         radioButton10x = tk.Radiobutton(plateSelectWindow, text="10x", variable=multiplicationFactor, value=10)
         radioButton5x.grid(row=1, column=1)
         radioButton10x.grid(row=2, column=1)
-        volumeLabel = tk.Label(plateSelectWindow, text="Volume of radioligand added: ")
+        volumeLabel = tk.Label(plateSelectWindow, text="Volume of radioligand added (mL): ")
         volumeLabel.grid(row=3, column=0, sticky="E")
         volumeEntry.grid(row=3, column=1, sticky="W")
+        specificActivityLabel = tk.Label(plateSelectWindow, text="Specific activity (Ci/pmol): ")
+        specificActivityLabel.grid(row=4, column=0, sticky="E")
+        specificActivityEntry.grid(row=4, column=1, sticky="W")
         plateConfirm = tk.Button(plateSelectWindow, text="Confirm count plate", command=confirm_count_plate)
-        plateConfirm.grid(row=4, column=0, columnspan=2)
+        plateConfirm.grid(row=5, column=0, columnspan=2)
         self.main.wait_window(plateSelectWindow)
         if self.countWindowClosed:
             return 0, 0
@@ -172,7 +185,7 @@ class WellDataGUI:
         self.main.grid_columnconfigure(1, weight=1)
         self.main.grid_columnconfigure(2, weight=1)
         self.main.grid_columnconfigure(3, weight=1)
-        self.table = TableCanvas(self.frame, model=self.model, read_only=False)
+        self.table = TableCanvas(self.frame, model=self.model, read_only=True)
         self.table.show()
         self.drugLabels = ["Drug 1: ", "Drug 2: ", "Drug 3: ", "Drug 4: "]
         self.drugEntries = []
@@ -199,7 +212,16 @@ class WellDataGUI:
             self.table.model.columnWidths = [columnWidth] * maxVisibleCols
             self.table.redraw()
 
+        def ctrl_click(event):
+            row = self.table.get_row_clicked
+            col = self.table.get_col_clicked
+            x1, y1, x2, y2 = self.table.getCellCoords(row, col)
+            self.table.create_rectangle(x1, y1, x2, y2, outline="blue", width=2)
+
+
+
         self.frame.bind("<Configure>", on_resize)
+        self.table.bind("<Control-Button-1>", ctrl_click)
 
         for i, labelText in enumerate(self.drugLabels):
             drugEntry = self.create_drug_entry(self.main, labelText, i + 1, 1)
