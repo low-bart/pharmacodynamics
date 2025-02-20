@@ -20,17 +20,17 @@ class AssayMetadata:
 
 class WellData:
     metadata = AssayMetadata()
-    drugs=[]                # list of drugs on plate, one per two rows
-    comments=[]             # list
-    data=[]                 # well plate data
-    totals=[]               # well plate totals with no drug
-    nsb=[]                  # well plate non-specific binding
-    highestConc=[]          # log [drug]
-    plateNo=[]              
-    specificActivityCi=[]   
-    specificActivityCpm=[]  
-    volMl=[]                
-
+    drugs = []                  # list of drugs on plate, one per two rows
+    comments = []               # list
+    data = []                   # well plate data
+    totals = []                 # well plate totals with no drug
+    nsb = []                    # well plate non-specific binding
+    highestConc = []            # log [drug]
+    plateNo = []                # plate number from original assay
+    specificActivityCi = []     # concentration entered by user
+    specificActivityCpm = []    # concentration converted  
+    volMl = []                  # volume of radioactive ligand added
+    omittedVals=[]              # list of values from original well data that are omitted by user selection
     def __init__(self, df, plate=1):
         if df.size == 96:
             self.data = df
@@ -88,6 +88,7 @@ class DrugReports:
     averageSpecific = []
     specificBound = []
     pctSpecificBinding = []
+    omittedVals = []
 
     def __init__(self, wellData, index):
         self.drug = wellData.drugs[index]

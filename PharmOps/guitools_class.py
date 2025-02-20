@@ -62,7 +62,7 @@ class BindingGUI:
     def calculate_specific_activity(self, countPlate, multFactor):
         filteredData = countPlate[countPlate > 100]
         averageCounts = filteredData.mean().mean()
-        self.cpmAdded = averageCounts * multFactor
+        cpmAdded = averageCounts * multFactor
         for index, row in countPlate.iterrows():
             print(row)
     
@@ -218,8 +218,6 @@ class WellDataGUI:
             x1, y1, x2, y2 = self.table.getCellCoords(row, col)
             self.table.create_rectangle(x1, y1, x2, y2, outline="blue", width=2)
 
-
-
         self.frame.bind("<Configure>", on_resize)
         self.table.bind("<Control-Button-1>", ctrl_click)
 
@@ -249,7 +247,7 @@ class WellDataGUI:
         self.update_plate()
         reports = self.plate.make_all_drug_reports()
         for report in reports:
-            io.save_new_h5(report, self.h5Path)
+            io.save_new_DrugReport(report, self.h5Path)
         print(f"Reports saved to {self.h5Path}")
         self.main.destroy()
         self.main.update()
@@ -274,8 +272,8 @@ class DrugReportsGUI:
         self.main.geometry("600x300")
         self.h5Path = io.get_default_h5_path()
         self.h5File = h5py.File(self.h5Path, "r")
-        self.drugs = list(self.h5File.keys())
-        self.dataset = {drug: self.h5File[drug] for drug in self.drugs}
+        self.drugs = list(self.h5File["reports"].keys())
+        self.dataset = {drug: self.h5File["reports"][drug] for drug in self.drugs}
         self.drugLabel = tk.Label(self.main, text="Select a drug: ")
         self.drugLabel.grid(row=0, column=0, sticky="NEW")
         self.drugSelected = tk.StringVar()
