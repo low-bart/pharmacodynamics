@@ -2,7 +2,6 @@ import pickle
 import h5py
 import pandas as pd
 import numpy as np
-import PharmOps
 from PharmOps import WellData
 from importlib.metadata import version
 from platformdirs import user_data_dir
@@ -21,14 +20,14 @@ def read_raw_well_txt(filepath):
             if match:
                 assayDate = match.group(0)              # return the first matched date
                 break
-
+    # parse text file with regex to separate plates
     matches = re.findall(pattern, rawData.to_string(), re.DOTALL)
     plateData = {}
-    plateDF = {}
     rowLabels = ["A", "B", "C", "D", "E", "F", "G", "H"]
     for match in matches:
         lines = re.split('\n', match)
         processedLines = []
+        # clean escaped tabs
         for line in lines:
             line = line.replace('\\t', '\t')
             contents = line.split('\t')
@@ -37,7 +36,7 @@ def read_raw_well_txt(filepath):
         if plateNumberMatch:
             plateNo = plateNumberMatch.group(1)
             plateData[f"Plate_{plateNo}"] = processedLines
-
+    # make dataframe from cleaned text segments
     cleanedData = {}
     for plate, rows in plateData.items():
         numericRows = []

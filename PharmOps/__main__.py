@@ -1,4 +1,4 @@
-from PharmOps.guitools_class import *
+from PharmOps.guitools import *
 
 def main():
     root = tk.Tk()
