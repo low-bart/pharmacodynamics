@@ -75,34 +75,40 @@ def get_default_h5_path(appName="PharmOps", fileName="data_store.h5"):
     os.makedirs(data_dir, exist_ok=True)  # Ensure the directory exists
     return os.path.join(data_dir, fileName)
 
-def save_new_h5(drugRep, filepath):
+def convert_date_string(dateStr):
+    parsedDate = datetime.strptime(dateStr, "%d-%b-%Y")
+    parsedDate = parsedDate.strftime("%Y%m%d")
+    return parsedDate
+
+def save_new_WellData(wellData, filepath):
+    serializedObj = pickle.dumps(wellData)
+    serializedArray = np.frombuffer(serializedObj, dtype='uint8')
+    parsedDate = convert_date_string(wellData.metadata.date)
+    plateNo = wellData.metadata.plate
+    with h5py.File(filepath, "a") as h5file:
+        group = h5file.require_group("assays/" + parsedDate)
+        group.create_dataset(plateNo, data=serializedArray)
+        group.attrs["version"] = version("PharmOps")
+
+def save_new_DrugReport(drugRep, filepath):
     serializedObj = pickle.dumps(drugRep)
     serializedArray = np.frombuffer(serializedObj, dtype='uint8')
     drugName = drugRep.drug
     receptorName = drugRep.metadata.receptor
-    dateStr = drugRep.metadata.date
-    print(dateStr)
-    parsedDate = datetime.strptime(dateStr, "%d-%b-%Y")
-    parsedDate = parsedDate.strftime("%Y%m%d")
+    parsedDate = convert_date_string(drugRep.metadata.date)
     with h5py.File(filepath, "a") as h5file:
-        group = h5file.require_group(drugName + "/" + receptorName)
-        '''
-        if receptorName in group:
-            print(f"Receptor '{receptorName}' already exists for drug '{drugName}'")
-            return
-        '''
+        group = h5file.require_group("reports/" + drugName + "/" + receptorName)
         grp = group.create_dataset(parsedDate, data=serializedArray)
-        currentVersion = version("PharmOps")
-        group.attrs["version"] = currentVersion
+        group.attrs["version"] = version("PharmOps")
 
 def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
     with h5py.File(filepath, "r") as h5file:
-        if drugName not in h5file:
+        if drugName not in h5file["reports"]:
             raise KeyError(f"No drug '{drugName}' found in h5 file")
-        if receptorName not in h5file[drugName]:
+        if receptorName not in h5file["reports"][drugName]:
             raise KeyError(f"No receptor '{receptorName}' data found for '{drugName}'")
-        if dateStr not in h5file[drugName][receptorName]:
+        if dateStr not in h5file["reports"][drugName][receptorName]:
             raise KeyError(f"No assay on '{dateStr}' for drug '{drugName}' and receptor '{receptorName}'")
-        serializedArray = h5file[drugName][receptorName][dateStr][:]
+        serializedArray = h5file["reports"][drugName][receptorName][dateStr][:]
     loadedRawData = pickle.loads(serializedArray.tobytes())
     return loadedRawData
