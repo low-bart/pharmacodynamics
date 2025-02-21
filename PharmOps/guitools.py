@@ -12,11 +12,15 @@ class BindingGUI:
     def __init__(self, main):
         self.main = main
         self.frame = tk.Frame(self.main)
-        self.loadWellDataButton = tk.Button(self.frame, 
+        self.newWellDataButton = tk.Button(self.frame, 
                                             text="Load new WellData", 
+                                            command=self.import_WellData)
+        self.newWellDataButton.pack()
+        self.frame.pack()
+        self.loadWellDataButton = tk.Button(self.frame,
+                                            text="Load saved WellData",
                                             command=self.load_WellData)
         self.loadWellDataButton.pack()
-        self.frame.pack()
         self.loadDrugReportsButton = tk.Button(self.frame, 
                                                text="Load saved DrugReports", 
                                                command=self.load_DrugReports)
@@ -66,7 +70,7 @@ class BindingGUI:
         for index, row in countPlate.iterrows():
             print(row)
     
-    def load_WellData(self):
+    def import_WellData(self):
         fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
                                               title='Select a file', 
                                               filetypes=(("Text files",
@@ -88,6 +92,9 @@ class BindingGUI:
             newWindow = tk.Toplevel(self.main)
             WellDataGUI(newWindow, plate)
             self.main.wait_window(newWindow)
+
+    def load_WellData(self):
+        pass
 
     def choose_count_plate(self, numCountPlates):
         plateSelectWindow = tk.Toplevel(self.main)
@@ -173,61 +180,59 @@ class BindingGUI:
 class WellDataGUI:
     def __init__(self, main, plate):
         self.main = main
-        self.frame = tk.Frame(self.main)
+        self.dataFrame = tk.Frame(self.main)
+        self.entryFrame = tk.Frame(self.main)
         self.plate = plate
-        dataDict = plate.data.to_dict(orient='index')
-        dataDict = {rowKey: {str(colKey): value for colKey, value in colValues.items()} for rowKey, colValues in dataDict.items()}
-        self.model = TableModel()
-        self.model.importDict(dataDict)
-        self.frame.grid(row=0, column=0, columnspan=4, sticky="N, E, W")
-        self.main.grid_rowconfigure(0, weight=0)
-        self.main.grid_columnconfigure(0, weight=1)
-        self.main.grid_columnconfigure(1, weight=1)
-        self.main.grid_columnconfigure(2, weight=1)
-        self.main.grid_columnconfigure(3, weight=1)
-        self.table = TableCanvas(self.frame, model=self.model, read_only=True)
-        self.table.show()
+        plateData = plate.data.reset_index(drop=True)
+        dataDict = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
+        #dataDict = plate.data.to_dict(orient='index')
+        #dataDict = {rowKey: {str(colKey): value for colKey, value in colValues.items()} for rowKey, colValues in dataDict.items()}
+        #self.model = TableModel()
+        #self.model.importDict(dataDict)
+        #self.frame.grid(row=0, column=0, columnspan=4, sticky="N, E, W")
+        self.dataFrame.pack(fill="both", expand="yes")
+        self.entryFrame.pack(fill="both", expand="yes")
+        self.customTable = CustomTable(self.dataFrame, dataDict)
+        self.customTable.pack(fill=tk.BOTH, expand=True)
+        #self.table = TableCanvas(self.dataFrame, model=self.model, read_only=True)
+        #self.table.show()
+        self.main.after(100, self.adjust_window_width)
         self.drugLabels = ["Drug 1: ", "Drug 2: ", "Drug 3: ", "Drug 4: "]
         self.drugEntries = []
         self.concentrationLabels = ["Highest concentration 1: ", "Highest concentration 2: ", "Highest concentration 3: ", "Highest concentration 4: "]
         self.concentrationEntries = []
-        receptorLabel = ttk.Label(self.main, text="Receptor name: ")
+        receptorLabel = ttk.Label(self.entryFrame, text="Receptor name: ")
         receptorLabel.grid(row=5, column=0, sticky="E")
-        self.receptorName = ttk.Entry(self.main)
+        self.receptorName = ttk.Entry(self.entryFrame)
         self.receptorName.grid(row=5, column=1, sticky="W")
-        makeReportButton = ttk.Button(self.main, text="Make new drug reports", command=self.make_drug_reports)
+        makeReportButton = ttk.Button(self.entryFrame, text="Make new drug reports", command=self.make_drug_reports)
         makeReportButton.grid(row=7, column=1, columnspan=2)
         self.h5Path = io.get_default_h5_path()
-        self.recentComment = tk.StringVar(self.main)
-        addCommentButton = ttk.Button(self.main, 
+        self.recentComment = tk.StringVar(self.entryFrame)
+        addCommentButton = ttk.Button(self.entryFrame, 
                                   text="Add comment", 
                                   command=lambda: self.add_comment(self.recentComment.get()))
-        self.recentCommentField = ttk.Entry(self.main, textvariable=self.recentComment)
+        self.recentCommentField = ttk.Entry(self.entryFrame, textvariable=self.recentComment)
         addCommentButton.grid(row=6, column=1)
         self.recentCommentField.grid(row=6, column=2)
-        def on_resize(event):
-            tableWidth = event.width
-            columnWidth = self.table.cellwidth
-            maxVisibleCols = max(1, tableWidth // columnWidth)
-            self.table.model.columnWidths = [columnWidth] * maxVisibleCols
-            self.table.redraw()
-
-        def ctrl_click(event):
-            row = self.table.get_row_clicked
-            col = self.table.get_col_clicked
-            x1, y1, x2, y2 = self.table.getCellCoords(row, col)
-            self.table.create_rectangle(x1, y1, x2, y2, outline="blue", width=2)
-
-        self.frame.bind("<Configure>", on_resize)
-        self.table.bind("<Control-Button-1>", ctrl_click)
 
         for i, labelText in enumerate(self.drugLabels):
-            drugEntry = self.create_drug_entry(self.main, labelText, i + 1, 1)
+            drugEntry = self.create_drug_entry(self.entryFrame, labelText, i + 1, 1)
             self.drugEntries.append(drugEntry)
 
         for i, labelText in enumerate(self.concentrationLabels):
-            concEntry = self.create_drug_entry(self.main, labelText, i + 1, 2)
+            concEntry = self.create_drug_entry(self.entryFrame, labelText, i + 1, 2)
             self.concentrationEntries.append(concEntry)
+
+    def adjust_window_width(self):
+        numCols = 12
+        numRows = 8
+        colWidth = self.customTable.cellWidth
+        totalWidth = numCols * colWidth
+        colHeight = self.customTable.cellHeight
+        totalHeight = numRows * colHeight
+        self.dataFrame.height = totalHeight
+        self.main.geometry(f"{totalWidth}x500")
 
     def add_comment(self, comment):
         print("comment added")
@@ -333,3 +338,45 @@ class DrugReportsGUI:
                 currentDrugReport.logConc[i],
                 currentDrugReport.pctTotal[i]
             ))
+
+class CustomTable(tk.Frame):
+    def __init__(self, parent, data):
+        super().__init__(parent)
+
+        self.data = data
+        self.selectedCells = set()
+        self.cellWidth = 60
+        self.cellHeight = 30
+
+        self.canvas = tk.Canvas(self, bg="white", bd=0, highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        self.draw_table()
+        self.canvas.bind("<Button-1>", self.handle_click)
+    
+    def draw_table(self):
+        self.canvas.delete("all")
+
+        for (row, col), value in self.data.items():
+            x1 = col * self.cellWidth
+            y1 = row * self.cellHeight
+            x2 = x1 + self.cellWidth
+            y2 = y1 + self.cellHeight
+
+            self.canvas.create_rectangle(x1, y1, x2, y2, outline="black", width=1)
+            self.canvas.create_text(x1 + self.cellWidth/2, y1 + self.cellHeight/2, text=value)
+            
+            if (row, col) in self.selectedCells:
+                self.canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=3)
+
+    def handle_click(self, event):
+        col = event.x // self.cellWidth
+        row = event.y // self.cellHeight
+
+        if (row, col) in self.data:
+            if (row, col) in self.selectedCells:
+                self.selectedCells.remove((row, col))
+            else:
+                self.selectedCells.add((row, col))
+            self.draw_table()
+    

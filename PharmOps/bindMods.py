@@ -30,7 +30,7 @@ class WellData:
     specificActivityCi = []     # concentration entered by user
     specificActivityCpm = []    # concentration converted  
     volMl = []                  # volume of radioactive ligand added
-    omittedVals=[]              # list of values from original well data that are omitted by user selection
+    omittedVals = []            # list of values from original well data that are omitted by user selection
     def __init__(self, df, plate=1):
         if df.size == 96:
             self.data = df
