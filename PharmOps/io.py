@@ -9,6 +9,7 @@ import os
 import re
 from datetime import datetime
 
+
 def read_raw_well_txt(filepath):
     rawData = pd.read_csv(filepath)
     pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
@@ -111,3 +112,6 @@ def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
         serializedArray = h5file["reports"][drugName][receptorName][dateStr][:]
     loadedRawData = pickle.loads(serializedArray.tobytes())
     return loadedRawData
+
+def load_summary_excel(filepath):
+    pass
