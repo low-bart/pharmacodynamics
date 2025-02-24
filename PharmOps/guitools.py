@@ -25,6 +25,9 @@ class BindingGUI:
                                                text="Load saved DrugReports", 
                                                command=self.load_DrugReports)
         self.loadDrugReportsButton.pack()
+        self.generateSummaryTableButton = tk.Button(self.frame,
+                                                    text="Generate summary tables",
+                                                    command=self.generate_summary_tables)
 
     def get_user_info(self):
         userInfo = tk.Toplevel(self.main)
@@ -176,6 +179,22 @@ class BindingGUI:
         DrugReportsGUI(newWindow)
         self.main.wait_window(newWindow)
 
+    def generate_summary_tables(self):
+        filepathDAR = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
+                                              title='Select a DAR summary sheet: ', 
+                                              filetypes=(("Excel Files",
+                                                        "*.xlsx*"),
+                                                       ("all files",
+                                                        "*.*")))
+        filepath5HT = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
+                                              title='Select a 5HT summary sheet: ', 
+                                              filetypes=(("Excel Files",
+                                                        "*.xlsx*"),
+                                                       ("all files",
+                                                        "*.*")))
+        bindingDAR = io.load_summary_excel(filepathDAR)
+        binding5HT = io.load_summary_excel(filepath5HT)
+        
             
 class WellDataGUI:
     def __init__(self, main, plate):
@@ -238,6 +257,7 @@ class WellDataGUI:
         print("comment added")
         self.plate.add_comment(comment)
         self.plate.display()
+        self.recentCommentField.delete(0, 'end')
 
     def create_drug_entry(self, parent, labelText, row, entryNo):
         entryVar = tk.StringVar()
