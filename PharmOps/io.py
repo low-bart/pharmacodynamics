@@ -8,6 +8,7 @@ from platformdirs import user_data_dir
 import os
 import re
 from datetime import datetime
+import openpyxl as pxl
 
 
 def read_raw_well_txt(filepath):
@@ -114,4 +115,57 @@ def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
     return loadedRawData
 
 def load_summary_excel(filepath):
-    pass
+    allowedNames = ("5HT1A", "5HT2A", "5HT2B", "5HT2C", "D1", "D2", "D3", "D4.4")
+    workbook = pxl.load_workbook(filepath, data_only=True)
+    summaryDict = {}
+    for name in workbook.sheetnames:
+        matchingReceptor = [isinstance(item, str) and re.search(item, name, re.IGNORECASE) for item in allowedNames]
+        print(name)
+        if not any(matchingReceptor):
+            print(name)
+            continue
+        summaryDict = parse_summary_sheet(workbook, name, summaryDict)
+    return summaryDict
+
+def parse_summary_sheet(workbook, receptor, summary):
+    def find_header(row, header):
+        indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
+        return indices
+    sheet = workbook[receptor]
+    keyHeaders = ['ic50', 'ki', 'hill slope']
+    valHeaders = ['ave', 'sem']
+    matchStr = r"\b(" + "|".join(map(re.escape, valHeaders)) + r")\b"
+    for idx, row in enumerate(sheet.iter_rows(values_only=True)):
+        ic50 = find_header(row, "ic50")
+        ki = find_header(row, "ki")
+        hillSlope = find_header(row, "hill slope")
+        averages = find_header(row, "ave")      # collected in case absolute refs are necessary
+        sem = find_header(row, "sem")           # collected in case absolute refs are necessary
+        headerRow = find_header(row, matchStr)
+        if ic50 and ki and hillSlope:
+            drugID = row[0]
+            if not drugID:
+                temp = idx
+            while not drugID:
+                temp = temp-1
+                drugID = sheet.cell(row=temp+1, column=1).value
+            if drugID not in summary:
+                summary[drugID] = {}
+            summary[drugID][receptor] = {
+                "mean": {"ic50": None, "ki": None, "hillSlope": None},
+                "sem": {"ic50": None, "ki": None, "hillSlope": None}
+            }
+            # relative average and sem indexing to the cells with the datatype's header
+            ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
+            ic50SEM = sheet.cell(row=idx+2, column=ic50[0]+3).value
+            kiAverage = sheet.cell(row=idx+2, column=ki[0]+2).value
+            kiSEM = sheet.cell(row=idx+2, column=ki[0]+3).value
+            hillAverage = sheet.cell(row=idx+2, column=hillSlope[0]+2).value
+            hillSEM = sheet.cell(row=idx+2, column=hillSlope[0]+3).value
+            summary[drugID][receptor]["mean"]["ic50"] = ic50Average
+            summary[drugID][receptor]["sem"]["ic50"] = ic50SEM
+            summary[drugID][receptor]["mean"]["ki"] = kiAverage
+            summary[drugID][receptor]["sem"]["ki"] = kiSEM
+            summary[drugID][receptor]["mean"]["hillSlope"] = hillAverage
+            summary[drugID][receptor]["sem"]["hillSlope"] = hillSEM
+    return summary
