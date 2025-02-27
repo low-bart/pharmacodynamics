@@ -114,7 +114,17 @@ def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
     loadedRawData = pickle.loads(serializedArray.tobytes())
     return loadedRawData
 
-def load_summary_excel(filepath):
+def find_excel_header(row, header):
+    indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
+    return indices
+
+def extract_mean_and_sem(row, identifier):
+    averages = find_excel_header(row, "ave")
+    sem = find_excel_header(row, "sem")
+    idCol = find_excel_header(row, identifier)
+
+
+def load_binding_summary_excel(filepath):
     allowedNames = ("5HT1A", "5HT2A", "5HT2B", "5HT2C", "D1", "D2", "D3", "D4.4")
     workbook = pxl.load_workbook(filepath, data_only=True)
     summaryDict = {}
@@ -124,24 +134,21 @@ def load_summary_excel(filepath):
         if not any(matchingReceptor):
             print(name)
             continue
-        summaryDict = parse_summary_sheet(workbook, name, summaryDict)
+        summaryDict = parse_binding_summary_sheet(workbook, name, summaryDict)
     return summaryDict
 
-def parse_summary_sheet(workbook, receptor, summary):
-    def find_header(row, header):
-        indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
-        return indices
+def parse_binding_summary_sheet(workbook, receptor, summary):
     sheet = workbook[receptor]
     keyHeaders = ['ic50', 'ki', 'hill slope']
     valHeaders = ['ave', 'sem']
     matchStr = r"\b(" + "|".join(map(re.escape, valHeaders)) + r")\b"
     for idx, row in enumerate(sheet.iter_rows(values_only=True)):
-        ic50 = find_header(row, "ic50")
-        ki = find_header(row, "ki")
-        hillSlope = find_header(row, "hill slope")
-        averages = find_header(row, "ave")      # collected in case absolute refs are necessary
-        sem = find_header(row, "sem")           # collected in case absolute refs are necessary
-        headerRow = find_header(row, matchStr)
+        ic50 = find_excel_header(row, "ic50")
+        ki = find_excel_header(row, "ki")
+        hillSlope = find_excel_header(row, "hill slope")
+        averages = find_excel_header(row, "ave")      # collected in case absolute refs are necessary
+        sem = find_excel_header(row, "sem")           # collected in case absolute refs are necessary
+        headerRow = find_excel_header(row, matchStr)
         if ic50 and ki and hillSlope:
             drugID = row[0]
             if not drugID:
@@ -169,3 +176,35 @@ def parse_summary_sheet(workbook, receptor, summary):
             summary[drugID][receptor]["mean"]["hillSlope"] = hillAverage
             summary[drugID][receptor]["sem"]["hillSlope"] = hillSEM
     return summary
+
+def make_function_table(srcDir):
+    receptorNames = ("5HT1A", "5HT2A", "5HT2B", "5HTR", "5HT2C", "D1", "D2", "D3", "D4")
+    dataIdentifiers =  ["FXN", "EC50"]
+    localFiles = os.listdir(srcDir)
+    fileId = {word: [file for file in localFiles if re.search(rf"\b{re.escape(word)}\b", file)] for word in receptorNames}
+    print(fileId)
+    for word in fileId:
+        if not fileId[word]:
+            continue
+        for file in fileId[word]:
+            fName, fExt = os.path.splitext(file)
+            if fExt != ".xlsx":
+                continue
+            workbook = pxl.load_workbook(srcDir + "\\" + file, data_only=True)
+            parse_wb_sheets(workbook)
+
+
+def parse_wb_sheets(workbook, summary):
+    summaryDict = {}
+    for name in workbook.sheetnames:
+        sheet = workbook[name]
+        print(sheet)
+        printNext = False
+        for row in sheet.iter_rows(values_only=True):
+            ec50 = find_excel_header(row, "ec50")
+            if printNext:
+                print(row)
+                printNext = False
+            if ec50:
+                printNext = True
+                print(row) 
