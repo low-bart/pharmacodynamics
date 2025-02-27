@@ -109,3 +109,19 @@ class DrugReports:
         self.average = self.average[0].tolist()
         self.specific = self.specific[0].tolist()
         self.pctTotal = self.pctTotal[0].tolist()
+
+class SummaryTable:
+    receptors = ["D1", "D2", "D3", "D4", 
+                 "5HT1A", "5HT2A", "5HT2B", "5HT2C"]
+    bindingColumns = ["IC50", "Ki", "Hill Slope"]
+    functionColumns = ["Agonist EC50", "Standard Agonist", "Percent Stimulation", 
+                       "Antagonist IC50", "Standard Antagonist", "Percent Inhibition"]
+    
+    def __init__(self, table, type):
+        match(type):
+            case("binding"):
+                pass
+            case("function"):
+                pass
+            case("combined"):
+                pass
