@@ -115,7 +115,7 @@ class DrugReports:
 
 class SummaryTable:
     receptors = ["D1", "D2", "D3", "D4", 
-                 "5HT1A", "5HT2A", "5HT2B", "5HT2C"]
+                 "1A", "2A", "2B", "2C"]
     bindingColumns = ["IC50", "Ki", "Hill Slope"]
     functionColumns = ["Agonist EC50", "Standard Agonist", "Percent Stimulation", 
                        "Antagonist IC50", "Standard Antagonist", "Percent Inhibition"]
@@ -134,7 +134,7 @@ class SummaryTable:
     def import_binding_data(self):
         loadMorePrompt = True
         while loadMorePrompt:
-            fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data")
+            fileName = filedialog.askopenfilename(initialdir=self.srcDir)
             workbook = pxl.load_workbook(fileName, data_only=True)
             self.parse_binding_table(workbook)
             loadMorePrompt = messagebox.askyesno("Load more binding data?")
@@ -163,8 +163,8 @@ class SummaryTable:
                 if drugID not in self.summary:
                     self.summary[drugID] = {}
                 self.summary[drugID][receptor] = {
-                    "mean": {"ic50": None, "ki": None, "hillSlope": None},
-                    "sem": {"ic50": None, "ki": None, "hillSlope": None}
+                    "mean": {"binding":{"ic50": None, "ki": None, "hillSlope": None}},
+                    "sem": {"binding":{"ic50": None, "ki": None, "hillSlope": None}}
                 }
                 # relative average and sem indexing to the cells with the datatype's header
                 ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
@@ -173,26 +173,29 @@ class SummaryTable:
                 kiSEM = sheet.cell(row=idx+2, column=ki[0]+3).value
                 hillAverage = sheet.cell(row=idx+2, column=hillSlope[0]+2).value
                 hillSEM = sheet.cell(row=idx+2, column=hillSlope[0]+3).value
-                self.summary[drugID][receptor]["mean"]["ic50"] = ic50Average
-                self.summary[drugID][receptor]["sem"]["ic50"] = ic50SEM
-                self.summary[drugID][receptor]["mean"]["ki"] = kiAverage
-                self.summary[drugID][receptor]["sem"]["ki"] = kiSEM
-                self.summary[drugID][receptor]["mean"]["hillSlope"] = hillAverage
-                self.summary[drugID][receptor]["sem"]["hillSlope"] = hillSEM
+                self.summary[drugID][receptor]["mean"]["binding"]["ic50"] = ic50Average
+                self.summary[drugID][receptor]["sem"]["binding"]["ic50"] = ic50SEM
+                self.summary[drugID][receptor]["mean"]["binding"]["ki"] = kiAverage
+                self.summary[drugID][receptor]["sem"]["binding"]["ki"] = kiSEM
+                self.summary[drugID][receptor]["mean"]["binding"]["hillSlope"] = hillAverage
+                self.summary[drugID][receptor]["sem"]["binding"]["hillSlope"] = hillSEM
 
     def import_function_data(self):
         loadMorePrompt = True
         while loadMorePrompt:
-            fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data")
+            fileName = filedialog.askopenfilename(initialdir=self.srcDir)
             workbook = pxl.load_workbook(fileName, data_only=True)
+            workbook.name = fileName
             self.parse_function_table(workbook)
-            loadMorePrompt = messagebox.askyesno("Load more binding data?")
+            loadMorePrompt = messagebox.askyesno("Load more function data?")
 
 
     def parse_function_table(self, workbook):
+        matchingFilename = [isinstance(item, str) and re.search(item, workbook.name, re.IGNORECASE) for item in self.receptors]
         for name in workbook.sheetnames:
+            print(name)
             matchingReceptor = [isinstance(item, str) and re.search(item, name, re.IGNORECASE) for item in self.receptors]
-            if not any(matchingReceptor):
+            if not any(matchingReceptor) and not any(matchingFilename):
                 print(f"No matching receptor found for workbook page {name}")
                 continue
             self.parse_function_summary_sheet(workbook, name)
@@ -201,10 +204,42 @@ class SummaryTable:
         sheet = workbook[receptor]
         for idx, row in enumerate(sheet.iter_rows(values_only=True)):
             ec50 = self.find_excel_header(row, "ec50")
-            if ec50:
+            ic50 = self.find_excel_header(row, "ic50")
+            pctVal = self.find_excel_header(row, "%")
+            ave = self.find_excel_header(row, "ave")
+            sem = self.find_excel_header(row, "sem")
+            if (ec50 or ic50) and ave and sem:
                 drugID = row[0]
                 if not drugID:
                     temp = idx
                 while not drugID:
                     temp = temp-1
                     drugID = sheet.cell(row=temp+1, column=1).value
+                if drugID not in self.summary:
+                    self.summary[drugID] = {}
+                self.summary[drugID][receptor] = {
+                    "mean": {"function":{"ec50": None, "pctStim": None, "ic50": None, "pctInhib": None}},
+                    "sem": {"function":{"ec50": None, "pctStim": None, "ic50": None, "pctInhib": None}}
+                }
+            if ec50 and ave and sem:
+                # relative average and sem indexing to the cells with the datatype's header
+                ec50Average = sheet.cell(row=idx+2, column=ec50[0]+2).value
+                ec50SEM = sheet.cell(row=idx+2, column=ec50[0]+3).value
+                pctStimAverage = sheet.cell(row=idx+2, column=pctVal[0]+2).value
+                pctStimSEM = sheet.cell(row=idx+2, column=pctVal[0]+3).value
+                print(ec50Average)
+                self.summary[drugID][receptor]["mean"]["function"]["ec50"] = ec50Average
+                self.summary[drugID][receptor]["sem"]["function"]["ec50"] = ec50SEM
+                self.summary[drugID][receptor]["mean"]["function"]["pctStim"] = pctStimAverage
+                self.summary[drugID][receptor]["sem"]["function"]["pctStim"] = pctStimSEM
+                print(row)
+            elif ic50 and ave and sem:
+                # relative average and sem indexing to the cells with the datatype's header
+                ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
+                ic50SEM = sheet.cell(row=idx+2, column=ic50[0]+3).value
+                pctInhibAverage = sheet.cell(row=idx+2, column=pctVal[0]+2).value
+                pctInhibSEM = sheet.cell(row=idx+2, column=pctVal[0]+3).value
+                self.summary[drugID][receptor]["mean"]["function"]["ic50"] = ic50Average
+                self.summary[drugID][receptor]["sem"]["function"]["ic50"] = ic50SEM
+                self.summary[drugID][receptor]["mean"]["function"]["pctInhib"] = pctInhibAverage
+                self.summary[drugID][receptor]["sem"]["function"]["pctInhib"] = pctInhibSEM
