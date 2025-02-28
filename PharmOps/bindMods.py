@@ -1,4 +1,7 @@
 import numpy as np
+from tkinter import messagebox, filedialog
+import openpyxl as pxl
+import re
 
 class AssayMetadata:
     date = []
@@ -116,12 +119,92 @@ class SummaryTable:
     bindingColumns = ["IC50", "Ki", "Hill Slope"]
     functionColumns = ["Agonist EC50", "Standard Agonist", "Percent Stimulation", 
                        "Antagonist IC50", "Standard Antagonist", "Percent Inhibition"]
-    
-    def __init__(self, table, type):
-        match(type):
-            case("binding"):
-                pass
-            case("function"):
-                pass
-            case("combined"):
-                pass
+    srcDir = []
+    summary = {}
+
+    def __init__(self, dir):
+            self.srcDir = dir
+            self.import_binding_data()
+            self.import_function_data()
+
+    def find_excel_header(self, row, header):
+        indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
+        return indices
+
+    def import_binding_data(self):
+        loadMorePrompt = True
+        while loadMorePrompt:
+            fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data")
+            workbook = pxl.load_workbook(fileName, data_only=True)
+            self.parse_binding_table(workbook)
+            loadMorePrompt = messagebox.askyesno("Load more binding data?")
+
+    def parse_binding_table(self, workbook):
+        for name in workbook.sheetnames:
+            matchingReceptor = [isinstance(item, str) and re.search(item, name, re.IGNORECASE) for item in self.receptors]
+            if not any(matchingReceptor):
+                print(f"No matching receptor found for workbook page {name}")
+                continue
+            self.parse_binding_summary_sheet(workbook, name)
+        
+    def parse_binding_summary_sheet(self, workbook, receptor):
+        sheet = workbook[receptor]
+        for idx, row in enumerate(sheet.iter_rows(values_only=True)):
+            ic50 = self.find_excel_header(row, "ic50")
+            ki = self.find_excel_header(row, "ki")
+            hillSlope = self.find_excel_header(row, "hill slope")
+            if ic50 and ki and hillSlope:
+                drugID = row[0]
+                if not drugID:
+                    temp = idx
+                while not drugID:
+                    temp = temp-1
+                    drugID = sheet.cell(row = temp+1, column=1).value
+                if drugID not in self.summary:
+                    self.summary[drugID] = {}
+                self.summary[drugID][receptor] = {
+                    "mean": {"ic50": None, "ki": None, "hillSlope": None},
+                    "sem": {"ic50": None, "ki": None, "hillSlope": None}
+                }
+                # relative average and sem indexing to the cells with the datatype's header
+                ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
+                ic50SEM = sheet.cell(row=idx+2, column=ic50[0]+3).value
+                kiAverage = sheet.cell(row=idx+2, column=ki[0]+2).value
+                kiSEM = sheet.cell(row=idx+2, column=ki[0]+3).value
+                hillAverage = sheet.cell(row=idx+2, column=hillSlope[0]+2).value
+                hillSEM = sheet.cell(row=idx+2, column=hillSlope[0]+3).value
+                self.summary[drugID][receptor]["mean"]["ic50"] = ic50Average
+                self.summary[drugID][receptor]["sem"]["ic50"] = ic50SEM
+                self.summary[drugID][receptor]["mean"]["ki"] = kiAverage
+                self.summary[drugID][receptor]["sem"]["ki"] = kiSEM
+                self.summary[drugID][receptor]["mean"]["hillSlope"] = hillAverage
+                self.summary[drugID][receptor]["sem"]["hillSlope"] = hillSEM
+
+    def import_function_data(self):
+        loadMorePrompt = True
+        while loadMorePrompt:
+            fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data")
+            workbook = pxl.load_workbook(fileName, data_only=True)
+            self.parse_function_table(workbook)
+            loadMorePrompt = messagebox.askyesno("Load more binding data?")
+
+
+    def parse_function_table(self, workbook):
+        for name in workbook.sheetnames:
+            matchingReceptor = [isinstance(item, str) and re.search(item, name, re.IGNORECASE) for item in self.receptors]
+            if not any(matchingReceptor):
+                print(f"No matching receptor found for workbook page {name}")
+                continue
+            self.parse_function_summary_sheet(workbook, name)
+
+    def parse_function_summary_sheet(self, workbook, receptor):
+        sheet = workbook[receptor]
+        for idx, row in enumerate(sheet.iter_rows(values_only=True)):
+            ec50 = self.find_excel_header(row, "ec50")
+            if ec50:
+                drugID = row[0]
+                if not drugID:
+                    temp = idx
+                while not drugID:
+                    temp = temp-1
+                    drugID = sheet.cell(row=temp+1, column=1).value

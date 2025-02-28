@@ -156,12 +156,6 @@ def parse_binding_summary_sheet(workbook, receptor, summary):
             while not drugID:
                 temp = temp-1
                 drugID = sheet.cell(row=temp+1, column=1).value
-            if drugID not in summary:
-                summary[drugID] = {}
-            summary[drugID][receptor] = {
-                "mean": {"ic50": None, "ki": None, "hillSlope": None},
-                "sem": {"ic50": None, "ki": None, "hillSlope": None}
-            }
             # relative average and sem indexing to the cells with the datatype's header
             ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
             ic50SEM = sheet.cell(row=idx+2, column=ic50[0]+3).value
