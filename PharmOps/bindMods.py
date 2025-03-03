@@ -2,6 +2,8 @@ import numpy as np
 from tkinter import messagebox, filedialog
 import openpyxl as pxl
 import re
+import matplotlib.pyplot as plt
+import pandas as pd
 
 class AssayMetadata:
     date = []
@@ -127,10 +129,47 @@ class SummaryTable:
             self.import_binding_data()
             self.import_function_data()
 
+    def add_receptor(self, drugID, receptor):
+        if drugID not in self.summary:
+            self.summary[drugID] = {}
+        if receptor not in self.summary[drugID]:
+            self.summary[drugID][receptor] = {
+                "mean": {
+                    "binding":{"ic50": None, "ki": None, "hillSlope": None},
+                    "function":{"ec50": None, "pctStim": None, "ic50": None, "pctInhib": None}
+                    },
+                "sem": {
+                    "binding":{"ic50": None, "ki": None, "hillSlope": None},
+                    "function":{"ec50": None, "pctStim": None, "ic50": None, "pctInhib": None}
+                    }
+            }
+
     def find_excel_header(self, row, header):
         indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
         return indices
+    
+    def find_drug_name(self, sheet, idx):
+        drugID = sheet.cell(row = idx+1, column=1).value
+        if not drugID:
+            temp = idx
+        while not drugID:
+            temp = temp-1
+            drugID = sheet.cell(row = temp+1, column=1).value
+        
+        drugID = str(drugID).splitlines()
+        return drugID[0]
 
+    def round_sig(self, x, sigFigs):
+        print(x)
+        if not x:
+            return '0'
+        rounded = '{:g}'.format(float('{:.{p}g}'.format(x, p=sigFigs)))
+        if len(rounded) < sigFigs and '.' not in rounded:
+            rounded = rounded + '.'
+        while len(rounded) <= sigFigs and '.' in rounded:
+            rounded = rounded + '0'
+        return rounded
+    
     def import_binding_data(self):
         loadMorePrompt = True
         while loadMorePrompt:
@@ -145,27 +184,19 @@ class SummaryTable:
             if not any(matchingReceptor):
                 print(f"No matching receptor found for workbook page {name}")
                 continue
-            self.parse_binding_summary_sheet(workbook, name)
+            receptorName = [self.receptors[i] for i, match in enumerate(matchingReceptor) if match]
+            sheet = workbook[name]
+            receptorName = receptorName[0]
+            self.parse_binding_summary_sheet(sheet, receptorName)
         
-    def parse_binding_summary_sheet(self, workbook, receptor):
-        sheet = workbook[receptor]
+    def parse_binding_summary_sheet(self, sheet, receptor):
         for idx, row in enumerate(sheet.iter_rows(values_only=True)):
             ic50 = self.find_excel_header(row, "ic50")
             ki = self.find_excel_header(row, "ki")
             hillSlope = self.find_excel_header(row, "hill slope")
             if ic50 and ki and hillSlope:
-                drugID = row[0]
-                if not drugID:
-                    temp = idx
-                while not drugID:
-                    temp = temp-1
-                    drugID = sheet.cell(row = temp+1, column=1).value
-                if drugID not in self.summary:
-                    self.summary[drugID] = {}
-                self.summary[drugID][receptor] = {
-                    "mean": {"binding":{"ic50": None, "ki": None, "hillSlope": None}},
-                    "sem": {"binding":{"ic50": None, "ki": None, "hillSlope": None}}
-                }
+                drugID = self.find_drug_name(sheet, idx)
+                self.add_receptor(drugID, receptor)
                 # relative average and sem indexing to the cells with the datatype's header
                 ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
                 ic50SEM = sheet.cell(row=idx+2, column=ic50[0]+3).value
@@ -179,6 +210,42 @@ class SummaryTable:
                 self.summary[drugID][receptor]["sem"]["binding"]["ki"] = kiSEM
                 self.summary[drugID][receptor]["mean"]["binding"]["hillSlope"] = hillAverage
                 self.summary[drugID][receptor]["sem"]["binding"]["hillSlope"] = hillSEM
+
+    def make_binding_summary_table(self):
+        meanPrecision = 3
+        semPrecision = 2
+        for drug, nestedDict in self.summary.items():
+            print(f"Drug: {drug}")
+            df = pd.DataFrame()
+            df['Receptor'] = list(self.summary[drug].keys())
+            ic50 = []
+            ki = []
+            hillSlope = []
+            for subKey, values in nestedDict.items():
+                if isinstance(values, dict):
+                    meanVals = values['mean']['binding']
+                    semVals = values['sem']['binding']
+                    combinedVals = {}
+                    for meanKey, semKey in zip(meanVals.keys(), semVals.keys()):
+                        outputStr = f"{self.round_sig(meanVals[meanKey], meanPrecision)} ± {self.round_sig(semVals[semKey], semPrecision)}"
+                        match(meanKey):
+                            case('ic50'):
+                                ic50.append(outputStr)
+                            case('ki'):
+                                ki.append(outputStr)
+                            case('hillSlope'):
+                                hillSlope.append(outputStr)
+            df['IC₅₀ (nM) ± SEM'] = ic50
+            df['Ki (nM) ± SEM'] = ki
+            df['Hill Slope ± SEM'] = hillSlope
+            fig, ax = plt.subplots()
+            ax.table(cellText=df.values,
+                        colLabels=df.columns,
+                        loc='center',
+                        cellLoc='center')
+            ax.set_axis_off()
+            plt.tight_layout()
+            plt.savefig(f'..\sample data\{drug}_binding_table.png', bbox_inches='tight')
 
     def import_function_data(self):
         loadMorePrompt = True
@@ -198,10 +265,16 @@ class SummaryTable:
             if not any(matchingReceptor) and not any(matchingFilename):
                 print(f"No matching receptor found for workbook page {name}")
                 continue
-            self.parse_function_summary_sheet(workbook, name)
+            if any(matchingFilename) and sum(1 for item in matchingFilename if item is not None):
+                receptorName = [self.receptors[i] for i, match in enumerate(matchingFilename) if match]
+            elif any(matchingReceptor):
+                receptorName = [self.receptors[i] for i, match in enumerate(matchingReceptor) if match]
+            sheet = workbook[name]
+            receptorName = receptorName[0]
+            self.parse_function_summary_sheet(sheet, receptorName)
 
-    def parse_function_summary_sheet(self, workbook, receptor):
-        sheet = workbook[receptor]
+    def parse_function_summary_sheet(self, sheet, receptor):
+        print(receptor)
         for idx, row in enumerate(sheet.iter_rows(values_only=True)):
             ec50 = self.find_excel_header(row, "ec50")
             ic50 = self.find_excel_header(row, "ic50")
@@ -215,19 +288,13 @@ class SummaryTable:
                 while not drugID:
                     temp = temp-1
                     drugID = sheet.cell(row=temp+1, column=1).value
-                if drugID not in self.summary:
-                    self.summary[drugID] = {}
-                self.summary[drugID][receptor] = {
-                    "mean": {"function":{"ec50": None, "pctStim": None, "ic50": None, "pctInhib": None}},
-                    "sem": {"function":{"ec50": None, "pctStim": None, "ic50": None, "pctInhib": None}}
-                }
+                self.add_receptor(drugID, receptor)
             if ec50 and ave and sem:
                 # relative average and sem indexing to the cells with the datatype's header
                 ec50Average = sheet.cell(row=idx+2, column=ec50[0]+2).value
                 ec50SEM = sheet.cell(row=idx+2, column=ec50[0]+3).value
                 pctStimAverage = sheet.cell(row=idx+2, column=pctVal[0]+2).value
                 pctStimSEM = sheet.cell(row=idx+2, column=pctVal[0]+3).value
-                print(ec50Average)
                 self.summary[drugID][receptor]["mean"]["function"]["ec50"] = ec50Average
                 self.summary[drugID][receptor]["sem"]["function"]["ec50"] = ec50SEM
                 self.summary[drugID][receptor]["mean"]["function"]["pctStim"] = pctStimAverage
