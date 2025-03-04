@@ -80,8 +80,6 @@ class WellData:
     def set_date(self, dateStr):
         self.metadata.date = dateStr
 
-
-
 class DrugReports:
     metadata = AssayMetadata()
     drug = []
@@ -353,3 +351,59 @@ class SummaryTable:
             plt.tight_layout()
             plt.savefig(f'..\sample data\{drug}_function_table.png', bbox_inches='tight')
 
+class ExcelGenerator:
+    def __init__(self):
+        self.assayRange = [34485, 34494]
+        self.blankRows = 12
+        self.saveDir = r'E:/pharmacodynamics/sample data/'
+        self.bindingDA = pxl.Workbook()
+        self.binding5HT = pxl.Workbook()
+        self.functionDA = pxl.Workbook()
+        self.function5HT = pxl.Workbook()
+        self.receptorsDA = ['D1', 'D2', 'D3', 'D4.4']
+        self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C']
+        self.make_binding_template("DA")
+        self.make_binding_template("5HT")
+
+
+    def make_binding_template(self, receptor):
+        match(receptor):
+            case("DA"):
+                wb = self.bindingDA
+                receptorList = self.receptorsDA
+            case("5HT"):
+                wb = self.binding5HT
+                receptorList = self.receptors5HT
+        ws1 = wb.active
+        ws1.title = receptorList[0]
+        for i in range(1, 4):
+            wb.create_sheet(receptorList[i])
+        # Include drug range, receptor, data checked, Kd, assay date, radioligand, passages
+        sheetTemplate1 = ['Assay Title', '', 'Receptor', '', 'Passage #:', '', 'Kd(nM)=', '']
+        sheetTemplate2 = ['Drug range', '', 'Radioligand']
+        drugTemplate = ['', 'Date', 
+                        'IC50', 'Average', 'SEM', 
+                        'Ki', 'Average', 'SEM', 
+                        'Hill slope', 'Average', 'SEM', 
+                        'Initials/Special Conditions']
+        for sheet in receptorList:
+            ws = wb[sheet]
+            ws.append(sheetTemplate1)
+            ws.append(sheetTemplate2)
+            ws.append([])
+            for i in range(self.assayRange[0], self.assayRange[1]+1):
+                ws.append(drugTemplate)
+                ws.cell(row=ws.max_row, column=1, value=i)
+                for i in range(0, self.blankRows):
+                    ws.append([])
+        wb.save(self.saveDir + receptor + '_binding_template.xlsx')
+        
+
+            
+
+
+    def make_function_template(self, receptor):
+        agonists = []
+        agStandards = []
+        antagonists = []
+        antagStandards = []
