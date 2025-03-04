@@ -161,7 +161,7 @@ class SummaryTable:
 
     def round_sig(self, x, sigFigs):
         print(x)
-        if not x:
+        if not x or x=="#DIV/0!" or x=='#VALUE!':
             return '0'
         rounded = '{:g}'.format(float('{:.{p}g}'.format(x, p=sigFigs)))
         if len(rounded) < sigFigs and '.' not in rounded:
@@ -187,6 +187,8 @@ class SummaryTable:
             receptorName = [self.receptors[i] for i, match in enumerate(matchingReceptor) if match]
             sheet = workbook[name]
             receptorName = receptorName[0]
+            if type(receptorName) is not str:
+                receptorName = str(receptorName)
             self.parse_binding_summary_sheet(sheet, receptorName)
         
     def parse_binding_summary_sheet(self, sheet, receptor):
@@ -211,7 +213,7 @@ class SummaryTable:
                 self.summary[drugID][receptor]["mean"]["binding"]["hillSlope"] = hillAverage
                 self.summary[drugID][receptor]["sem"]["binding"]["hillSlope"] = hillSEM
 
-    def make_binding_summary_table(self):
+    def make_binding_summary_tables(self):
         meanPrecision = 3
         semPrecision = 2
         for drug, nestedDict in self.summary.items():
@@ -239,10 +241,12 @@ class SummaryTable:
             df['Ki (nM) ± SEM'] = ki
             df['Hill Slope ± SEM'] = hillSlope
             fig, ax = plt.subplots()
-            ax.table(cellText=df.values,
+            table = ax.table(cellText=df.values,
                         colLabels=df.columns,
                         loc='center',
                         cellLoc='center')
+            table.auto_set_font_size(False)
+            table.set_fontsize(12)
             ax.set_axis_off()
             plt.tight_layout()
             plt.savefig(f'..\sample data\{drug}_binding_table.png', bbox_inches='tight')
@@ -271,6 +275,8 @@ class SummaryTable:
                 receptorName = [self.receptors[i] for i, match in enumerate(matchingReceptor) if match]
             sheet = workbook[name]
             receptorName = receptorName[0]
+            if type(receptorName) is not str:
+                receptorName = str(receptorName)
             self.parse_function_summary_sheet(sheet, receptorName)
 
     def parse_function_summary_sheet(self, sheet, receptor):
@@ -282,12 +288,7 @@ class SummaryTable:
             ave = self.find_excel_header(row, "ave")
             sem = self.find_excel_header(row, "sem")
             if (ec50 or ic50) and ave and sem:
-                drugID = row[0]
-                if not drugID:
-                    temp = idx
-                while not drugID:
-                    temp = temp-1
-                    drugID = sheet.cell(row=temp+1, column=1).value
+                drugID = self.find_drug_name(sheet, idx)
                 self.add_receptor(drugID, receptor)
             if ec50 and ave and sem:
                 # relative average and sem indexing to the cells with the datatype's header
@@ -299,7 +300,6 @@ class SummaryTable:
                 self.summary[drugID][receptor]["sem"]["function"]["ec50"] = ec50SEM
                 self.summary[drugID][receptor]["mean"]["function"]["pctStim"] = pctStimAverage
                 self.summary[drugID][receptor]["sem"]["function"]["pctStim"] = pctStimSEM
-                print(row)
             elif ic50 and ave and sem:
                 # relative average and sem indexing to the cells with the datatype's header
                 ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
@@ -310,3 +310,46 @@ class SummaryTable:
                 self.summary[drugID][receptor]["sem"]["function"]["ic50"] = ic50SEM
                 self.summary[drugID][receptor]["mean"]["function"]["pctInhib"] = pctInhibAverage
                 self.summary[drugID][receptor]["sem"]["function"]["pctInhib"] = pctInhibSEM
+
+    def make_function_summary_tables(self):
+        meanPrecision = 3
+        semPrecision = 2
+        for drug, nestedDict in self.summary.items():
+            print(f"Drug: {drug}")
+            df = pd.DataFrame()
+            df['Receptor'] = list(self.summary[drug].keys())
+            ec50 = []
+            pctStim = []
+            ic50 = []
+            pctInhib = []
+            for subKey, values in nestedDict.items():
+                if isinstance(values, dict):
+                    meanVals = values['mean']['function']
+                    semVals = values['sem']['function']
+                    combinedVals = {}
+                    for meanKey, semKey in zip(meanVals.keys(), semVals.keys()):
+                        outputStr = f"{self.round_sig(meanVals[meanKey], meanPrecision)} ± {self.round_sig(semVals[semKey], semPrecision)}"
+                        match(meanKey):
+                            case('ec50'):
+                                ec50.append(outputStr)
+                            case('pctStim'):
+                                pctStim.append(outputStr)
+                            case('ic50'):
+                                ic50.append(outputStr)
+                            case('pctInhib'):
+                                pctInhib.append(outputStr)
+            df['Agonist EC₅₀ (nM) ± SEM'] = ec50
+            df['% Stimulation'] = pctStim
+            df['Antagonist IC₅₀ (nM) ± SEM'] = ic50
+            df['% Inhibition'] = pctInhib
+            fig, ax = plt.subplots()
+            table = ax.table(cellText=df.values,
+                        colLabels=df.columns,
+                        loc='center',
+                        cellLoc='center')
+            table.auto_set_font_size(False)
+            table.set_fontsize(12)
+            ax.set_axis_off()
+            plt.tight_layout()
+            plt.savefig(f'..\sample data\{drug}_function_table.png', bbox_inches='tight')
+
