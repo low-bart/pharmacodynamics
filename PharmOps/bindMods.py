@@ -352,7 +352,7 @@ class SummaryTable:
             plt.savefig(f'..\sample data\{drug}_function_table.png', bbox_inches='tight')
 
 class TemplateGenerator:
-    def __init__(self, saveDir=r'E:/pharmacodynamics/sample data/'):
+    def __init__(self, saveDir=r'E:/pharmacodynamics/sample data/summary table/'):
         self.assayEdges = [34485, 34494]
         self.assayRange = range(self.assayEdges[0], self.assayEdges[1]+1)
         self.saveDir = saveDir
@@ -366,6 +366,8 @@ class TemplateGenerator:
         self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '', 'Kd(nM)=', '']
         self.bindingRow = ['Drug range', '', 'Radioligand']
         self.functionRow = ['Drug range']
+        self.bindingKdCell = "$H$1"
+        self.tempConcentration = 1   # This is controlling the value of the competing ligand constant for now, needs to be remapped to a real value
         self.make_binding_template("DA")
         self.make_binding_template("5HT")
         self.make_function_template("DA")
@@ -394,11 +396,29 @@ class TemplateGenerator:
             ws.append(self.sheetTemplate)
             ws.append(self.bindingRow)
             ws.append([])
+            startingRow = 4
             for i in self.assayRange:
+                self.startRange = startingRow + 1
+                self.endRange = startingRow + self.blankRows + 1
                 ws.append(drugTemplate)
                 ws.cell(row=ws.max_row, column=1, value=i)
                 for i in range(0, self.blankRows + 1):
                     ws.append([])
+                    ws.cell(row=ws.max_row+1, column=6, 
+                            value=self.add_formula('Ki', 'C', ws.max_row+1))
+                ws.cell(row=startingRow+1, column=4, 
+                        value=self.add_formula('Mean', 'C'))
+                ws.cell(row=startingRow+1, column = 5, 
+                        value=self.add_formula('SEM', 'C'))
+                ws.cell(row=startingRow+1, column=7, 
+                        value=self.add_formula('Mean', 'F'))
+                ws.cell(row=startingRow+1, column = 8, 
+                        value=self.add_formula('SEM', 'F'))
+                ws.cell(row=startingRow+1, column=10, 
+                        value=self.add_formula('Mean', 'I'))
+                ws.cell(row=startingRow+1, column = 11, 
+                        value=self.add_formula('SEM', 'I'))
+                startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
 
     def make_function_template(self, receptor):
@@ -445,3 +465,12 @@ class TemplateGenerator:
                     wsAgonist.append([])
                     wsAntagonist.append([])
         wb.save(self.saveDir + 'function_template_' + receptor + '.xlsx')
+    
+    def add_formula(self, calculation, column, row=None):
+        calculationDict = {
+            'Mean': f'=AVERAGEIF({column}{self.startRange}:{column}{self.endRange}, \"<>0\")', 
+            'SEM': f'=STDEV({column}{self.startRange}:{column}{self.endRange})/SQRT(COUNT({column}{self.startRange}:{column}{self.endRange}))', 
+            'Ki': f'={column}{row}/(1+{self.tempConcentration}/{self.bindingKdCell})', 
+            'Log': f'=LOG({column}{row}*0.000000001)'}
+        formula = calculationDict[calculation]
+        return formula
