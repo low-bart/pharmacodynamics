@@ -364,6 +364,21 @@ class TemplateGenerator:
         self.receptorsDA = ['D1', 'D2', 'D3', 'D4.4']
         self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C']
         self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '', 'Kd(nM)=', '']
+        self.bindingTemplate = ['', 'Date', 
+                        'IC50', 'Average', 'SEM', 
+                        'Ki', 'Average', 'SEM', 
+                        'Hill slope', 'Average', 'SEM', 
+                        'Initials/Special Conditions']
+        self.agonistTemplate = ['', 'Date', 
+                           'EC50', 'Mean', 'SEM', 
+                           'Max effect', 'Max standard', 
+                           '% max standard', 'Mean', 'SEM', 
+                           'Notes']
+        self.antagonistTemplate = ['', 'Date', 
+                              'IC50', 'Mean', 'SEM',
+                              'Top of curve', 'Standard % Agonist',
+                              '% reversal', 'Mean', 'SEM',
+                              'Notes']
         self.bindingRow = ['Drug range', '', 'Radioligand']
         self.functionRow = ['Drug range']
         self.bindingKdCell = "$H$1"
@@ -385,12 +400,6 @@ class TemplateGenerator:
         ws1.title = receptorList[0]
         for i in range(1, 4):
             wb.create_sheet(receptorList[i])
-        # Include drug range, receptor, data checked, Kd, assay date, radioligand, passages
-        drugTemplate = ['', 'Date', 
-                        'IC50', 'Average', 'SEM', 
-                        'Ki', 'Average', 'SEM', 
-                        'Hill slope', 'Average', 'SEM', 
-                        'Initials/Special Conditions']
         for sheet in receptorList:
             ws = wb[sheet]
             ws.append(self.sheetTemplate)
@@ -400,24 +409,13 @@ class TemplateGenerator:
             for i in self.assayRange:
                 self.startRange = startingRow + 1
                 self.endRange = startingRow + self.blankRows + 1
-                ws.append(drugTemplate)
+                ws.append(self.bindingTemplate)
                 ws.cell(row=ws.max_row, column=1, value=i)
                 for i in range(0, self.blankRows + 1):
                     ws.append([])
                     ws.cell(row=ws.max_row+1, column=6, 
                             value=self.add_formula('Ki', 'C', ws.max_row+1))
-                ws.cell(row=startingRow+1, column=4, 
-                        value=self.add_formula('Mean', 'C'))
-                ws.cell(row=startingRow+1, column = 5, 
-                        value=self.add_formula('SEM', 'C'))
-                ws.cell(row=startingRow+1, column=7, 
-                        value=self.add_formula('Mean', 'F'))
-                ws.cell(row=startingRow+1, column = 8, 
-                        value=self.add_formula('SEM', 'F'))
-                ws.cell(row=startingRow+1, column=10, 
-                        value=self.add_formula('Mean', 'I'))
-                ws.cell(row=startingRow+1, column = 11, 
-                        value=self.add_formula('SEM', 'I'))
+                self.populate_value_headers(ws, startingRow+1, 3)
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
 
@@ -435,18 +433,6 @@ class TemplateGenerator:
         for i in range(1, 4):
             wb.create_sheet(receptorList[i] + ' agonist')
             wb.create_sheet(receptorList[i] + ' antagonist')
-        agonistTemplate = ['', 'Date', 
-                           'EC50', 'Mean', 'SEM', 
-                           'Max effect', 'Max standard', 
-                           '% max standard', 'Mean', 'SEM', 
-                           'Notes'
-        ]
-        antagonistTemplate = ['', 'Date', 
-                              'IC50', 'Mean', 'SEM',
-                              'Top of curve', 'Standard % Agonist',
-                              '% reversal', 'Mean', 'SEM',
-                              'Notes'
-        ]
         for sheet in receptorList:
             wsAgonist = wb[sheet + ' agonist']
             wsAgonist.append(self.sheetTemplate)
@@ -457,9 +443,9 @@ class TemplateGenerator:
             wsAntagonist.append(self.functionRow)
             wsAntagonist.append([])
             for i in self.assayRange:
-                wsAgonist.append(agonistTemplate)
+                wsAgonist.append(self.agonistTemplate)
                 wsAgonist.cell(row=wsAgonist.max_row, column=1, value=i)
-                wsAntagonist.append(antagonistTemplate)
+                wsAntagonist.append(self.antagonistTemplate)
                 wsAntagonist.cell(row=wsAntagonist.max_row, column=1, value=i)
                 for i in range(0, self.blankRows + 1):
                     wsAgonist.append([])
@@ -474,3 +460,16 @@ class TemplateGenerator:
             'Log': f'=LOG({column}{row}*0.000000001)'}
         formula = calculationDict[calculation]
         return formula
+    
+    def populate_value_headers(self, worksheet, row, iterations):
+        startingCell = ord('A')
+        referenceCell = ord('C')
+        for i in range(0, iterations):
+            referenceLetter = chr(referenceCell)
+            meanCell = referenceCell - startingCell + 2
+            semCell = referenceCell - startingCell + 3
+            worksheet.cell(row=row, column=meanCell, 
+                    value=self.add_formula('Mean', referenceLetter))
+            worksheet.cell(row=row, column = semCell, 
+                    value=self.add_formula('SEM', referenceLetter))
+            referenceCell += 3
