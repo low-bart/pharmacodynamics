@@ -258,7 +258,6 @@ class SummaryTable:
             self.parse_function_table(workbook)
             loadMorePrompt = messagebox.askyesno("Load more function data?")
 
-
     def parse_function_table(self, workbook):
         matchingFilename = [isinstance(item, str) and re.search(item, workbook.name, re.IGNORECASE) for item in self.receptors]
         for name in workbook.sheetnames:
@@ -415,7 +414,7 @@ class TemplateGenerator:
                     ws.append([])
                     ws.cell(row=ws.max_row+1, column=6, 
                             value=self.add_formula('Ki', 'C', ws.max_row+1))
-                self.populate_value_headers(ws, startingRow+1, 3)
+                self.populate_value_headers(ws, startingRow+1)
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
 
@@ -442,7 +441,10 @@ class TemplateGenerator:
             wsAntagonist.append(self.sheetTemplate)
             wsAntagonist.append(self.functionRow)
             wsAntagonist.append([])
+            startingRow = 4
             for i in self.assayRange:
+                self.startRange = startingRow + 1
+                self.endRange = startingRow + self.blankRows + 1
                 wsAgonist.append(self.agonistTemplate)
                 wsAgonist.cell(row=wsAgonist.max_row, column=1, value=i)
                 wsAntagonist.append(self.antagonistTemplate)
@@ -450,8 +452,11 @@ class TemplateGenerator:
                 for i in range(0, self.blankRows + 1):
                     wsAgonist.append([])
                     wsAntagonist.append([])
+                self.populate_value_headers(wsAgonist, startingRow+1, iterations=2, spacing=5)
+                self.populate_value_headers(wsAntagonist, startingRow+1, iterations=2, spacing=5)
+                startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'function_template_' + receptor + '.xlsx')
-    
+
     def add_formula(self, calculation, column, row=None):
         calculationDict = {
             'Mean': f'=AVERAGEIF({column}{self.startRange}:{column}{self.endRange}, \"<>0\")', 
@@ -460,8 +465,8 @@ class TemplateGenerator:
             'Log': f'=LOG({column}{row}*0.000000001)'}
         formula = calculationDict[calculation]
         return formula
-    
-    def populate_value_headers(self, worksheet, row, iterations):
+
+    def populate_value_headers(self, worksheet, row, iterations=3, spacing=3):
         startingCell = ord('A')
         referenceCell = ord('C')
         for i in range(0, iterations):
@@ -472,4 +477,4 @@ class TemplateGenerator:
                     value=self.add_formula('Mean', referenceLetter))
             worksheet.cell(row=row, column = semCell, 
                     value=self.add_formula('SEM', referenceLetter))
-            referenceCell += 3
+            referenceCell += spacing
