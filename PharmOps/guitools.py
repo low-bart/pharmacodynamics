@@ -1,12 +1,8 @@
 import tkinter as tk
-from tkinter import filedialog, Event, ttk
-from tkintertable import TableCanvas, TableModel
-from PharmOps import WellData
+from tkinter import filedialog, ttk
 from PharmOps import io
-import pandas as pd
 import numpy as np
 import h5py
-import re
 
 class BindingGUI:
     def __init__(self, main):

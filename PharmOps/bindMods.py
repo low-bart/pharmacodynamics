@@ -5,6 +5,7 @@ import re
 import matplotlib.pyplot as plt
 import pandas as pd
 
+# This class is intended to synchronize WellData and corresponding DrugReports metadata
 class AssayMetadata:
     date = []
     ctr = []
@@ -23,6 +24,7 @@ class AssayMetadata:
         print(self.h5Path)
         print(self.rawDataPath)
 
+# Stores 96 well-plate pharmacology assay data
 class WellData:
     metadata = AssayMetadata()
     drugs = []                  # list of drugs on plate, one per two rows
@@ -36,6 +38,7 @@ class WellData:
     specificActivityCpm = []    # concentration converted  
     volMl = []                  # volume of radioactive ligand added
     omittedVals = []            # list of values from original well data that are omitted by user selection
+
     def __init__(self, df, plate=1):
         if df.size == 96:
             self.data = df
@@ -80,15 +83,16 @@ class WellData:
     def set_date(self, dateStr):
         self.metadata.date = dateStr
 
+# Stores assay for one drug/receptor/date combination
 class DrugReports:
-    metadata = AssayMetadata()
-    drug = []
-    average = []
-    specific = []
-    concentration = []
-    logConc = []
-    pctTotal = []
-    averageSpecific = []
+    metadata = AssayMetadata()  
+    drug = []                   # Drug name
+    average = []                # Average counts at a given concentration
+    specific = []               # Average counts - nonspecific binding
+    concentration = []          # Drug concentration in Molarity
+    logConc = []                # log [drug]
+    pctTotal = []               # specific activity/specific bound
+    averageSpecific = []        # mean 
     specificBound = []
     pctSpecificBinding = []
     omittedVals = []
@@ -362,10 +366,10 @@ class TemplateGenerator:
         self.function5HT = pxl.Workbook()
         self.receptorsDA = ['D1', 'D2', 'D3', 'D4.4']
         self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C']
-        self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '', 'Kd(nM)=', '']
+        self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '']
         self.bindingTemplate = ['', 'Date', 
                         'IC50', 'Average', 'SEM', 
-                        'Ki', 'Average', 'SEM', 
+                        '[radioligand]', 'Ki', 'Average', 'SEM', 
                         'Hill slope', 'Average', 'SEM', 
                         'Initials/Special Conditions']
         self.agonistTemplate = ['', 'Date', 
@@ -381,6 +385,9 @@ class TemplateGenerator:
         self.bindingRow = ['Drug range', '', 'Radioligand']
         self.functionRow = ['Drug range']
         self.bindingKdCell = "$H$1"
+        self.ligandConcCol = 'F'
+        self.maxEffectCol = 'F'
+        self.standardCol = 'G'
         self.tempConcentration = 1   # This is controlling the value of the competing ligand constant for now, needs to be remapped to a real value
         self.make_binding_template("DA")
         self.make_binding_template("5HT")
@@ -402,6 +409,7 @@ class TemplateGenerator:
         for sheet in receptorList:
             ws = wb[sheet]
             ws.append(self.sheetTemplate)
+            ws.cell(row=1, column=7, value = 'Kd(nM)=')
             ws.append(self.bindingRow)
             ws.append([])
             startingRow = 4
@@ -410,11 +418,12 @@ class TemplateGenerator:
                 self.endRange = startingRow + self.blankRows + 1
                 ws.append(self.bindingTemplate)
                 ws.cell(row=ws.max_row, column=1, value=i)
-                for i in range(0, self.blankRows + 1):
+                ws.append([])
+                ws.cell(row=ws.max_row+1, column=7, 
+                        value=self.add_formula('Ki', 'C', ws.max_row+1))
+                for i in range(0, self.blankRows):
                     ws.append([])
-                    ws.cell(row=ws.max_row+1, column=6, 
-                            value=self.add_formula('Ki', 'C', ws.max_row+1))
-                self.populate_value_headers(ws, startingRow+1)
+                self.populate_value_headers(ws, startingRow+1, ['C', 'G', 'J'])
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
 
@@ -449,32 +458,38 @@ class TemplateGenerator:
                 wsAgonist.cell(row=wsAgonist.max_row, column=1, value=i)
                 wsAntagonist.append(self.antagonistTemplate)
                 wsAntagonist.cell(row=wsAntagonist.max_row, column=1, value=i)
-                for i in range(0, self.blankRows + 1):
+                wsAgonist.append([])
+                wsAgonist.cell(row=wsAgonist.max_row+1, column=8, 
+                                value=self.add_formula('pctMax', column=None, row=wsAgonist.max_row+1))
+                wsAntagonist.append([])
+                wsAntagonist.cell(row=wsAntagonist.max_row+1, column=8, 
+                                value=self.add_formula('pctReversal', column=None, row=wsAntagonist.max_row+1))
+                for i in range(0, self.blankRows):
                     wsAgonist.append([])
                     wsAntagonist.append([])
-                self.populate_value_headers(wsAgonist, startingRow+1, iterations=2, spacing=5)
-                self.populate_value_headers(wsAntagonist, startingRow+1, iterations=2, spacing=5)
+                self.populate_value_headers(wsAgonist, startingRow+1, ['C', 'H'])
+                self.populate_value_headers(wsAntagonist, startingRow+1, ['C', 'H'])
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'function_template_' + receptor + '.xlsx')
 
-    def add_formula(self, calculation, column, row=None):
+    def add_formula(self, calculation, column=None, row=None):
         calculationDict = {
             'Mean': f'=AVERAGEIF({column}{self.startRange}:{column}{self.endRange}, \"<>0\")', 
             'SEM': f'=STDEV({column}{self.startRange}:{column}{self.endRange})/SQRT(COUNT({column}{self.startRange}:{column}{self.endRange}))', 
-            'Ki': f'={column}{row}/(1+{self.tempConcentration}/{self.bindingKdCell})', 
+            'Ki': f'={column}{row}/(1+{self.ligandConcCol}{row}/{self.bindingKdCell})', 
+            'pctMax': f'=(100-{self.maxEffectCol}{row})/(100-{self.standardCol}{row})*100',
+            'pctReversal': f'=({self.maxEffectCol}{row}-{self.standardCol}{row})*100/(100-{self.standardCol}{row})',
             'Log': f'=LOG({column}{row}*0.000000001)'}
         formula = calculationDict[calculation]
         return formula
 
-    def populate_value_headers(self, worksheet, row, iterations=3, spacing=3):
+    def populate_value_headers(self, worksheet, row, columns):
         startingCell = ord('A')
-        referenceCell = ord('C')
-        for i in range(0, iterations):
-            referenceLetter = chr(referenceCell)
+        for i in columns:
+            referenceCell = ord(i)
             meanCell = referenceCell - startingCell + 2
             semCell = referenceCell - startingCell + 3
             worksheet.cell(row=row, column=meanCell, 
-                    value=self.add_formula('Mean', referenceLetter))
+                    value=self.add_formula('Mean', i))
             worksheet.cell(row=row, column = semCell, 
-                    value=self.add_formula('SEM', referenceLetter))
-            referenceCell += spacing
+                    value=self.add_formula('SEM', i))
