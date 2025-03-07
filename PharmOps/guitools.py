@@ -4,6 +4,7 @@ from PharmOps import io
 import numpy as np
 import h5py
 
+# Class for the gui window that acts as home screen
 class BindingGUI:
     def __init__(self, main):
         self.main = main
@@ -24,7 +25,7 @@ class BindingGUI:
         self.generateSummaryTableButton = tk.Button(self.frame,
                                                     text="Generate summary tables",
                                                     command=self.generate_summary_tables)
-
+    # creates new window to verify user
     def get_user_info(self):
         userInfo = tk.Toplevel(self.main)
         userName = tk.StringVar(userInfo)
@@ -69,6 +70,7 @@ class BindingGUI:
         for index, row in countPlate.iterrows():
             print(row)
     
+    # loads new window from WellDataGUI class to import WellData from text file
     def import_WellData(self):
         fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
                                               title='Select a file', 
@@ -92,9 +94,11 @@ class BindingGUI:
             WellDataGUI(newWindow, plate)
             self.main.wait_window(newWindow)
 
+    # will load and display WellData from h5 file
     def load_WellData(self):
         pass
 
+    # loads new waitwindow making user pick count plate, radioligand concentration, and multiplication factor
     def choose_count_plate(self, numCountPlates):
         plateSelectWindow = tk.Toplevel(self.main)
         selectedPlate = tk.StringVar(self.main)
@@ -170,11 +174,13 @@ class BindingGUI:
             selectedPlateInt = 0
         return selectedPlateInt, multiplicationFactor.get()
 
+    # loads and displays DrugReports from DrugReportsGUI
     def load_DrugReports(self):
         newWindow = tk.Toplevel(self.main)
         DrugReportsGUI(newWindow)
         self.main.wait_window(newWindow)
 
+    # will make summary tables - unclear if this will remain here
     def generate_summary_tables(self):
         filepathDAR = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
                                               title='Select a DAR summary sheet: ', 
@@ -191,7 +197,7 @@ class BindingGUI:
         bindingDAR = io.load_summary_excel(filepathDAR)
         binding5HT = io.load_summary_excel(filepath5HT)
         
-            
+# guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
     def __init__(self, main, plate):
         self.main = main
@@ -287,6 +293,7 @@ class WellDataGUI:
             self.plate.update_drugs(entry.get(), i) 
         self.plate.update_receptor(self.receptorName.get())
 
+# gui class for displaying saved DrugReports from h5
 class DrugReportsGUI:
     def __init__(self, main):
         self.main = main
@@ -355,6 +362,7 @@ class DrugReportsGUI:
                 currentDrugReport.pctTotal[i]
             ))
 
+# Allows for custom behavior in tabular data like cell selection and highlighting
 class CustomTable(tk.Frame):
     def __init__(self, parent, data):
         super().__init__(parent)

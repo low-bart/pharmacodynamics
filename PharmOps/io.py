@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 import openpyxl as pxl
 
-
+# Parses a text file containing raw well-plate data and makes WellData objects
 def read_raw_well_txt(filepath):
     rawData = pd.read_csv(filepath)
     pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
@@ -52,35 +52,36 @@ def read_raw_well_txt(filepath):
                 numericRows.append(dataColumnsInt)
             except ValueError:
                 continue
-
         df = pd.DataFrame(numericRows, columns=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
         df.index = [row[0].strip()[-1] for row in rows if row[0].strip()[-1] in rowLabels]
         cleanedData[plate] = df
-
+    # make WellData array
     wellDataObjects = []
     for plate, df in cleanedData.items():
         wellDataObjects.append(WellData(df, plate))
         wellDataObjects[-1].set_date(assayDate)
-        
     return wellDataObjects
 
-
+# Deprecated method for making WellData from a csv
 def read_raw_well_csv(filepath):
     rawData = pd.read_excel(filepath)
     rawWellValues = rawData.loc[rawData.index[0:8], range(1, 12)]    
     return rawWellValues
 
+# uses os default data dir from installation to save h5 file
 def get_default_h5_path(appName="PharmOps", fileName="data_store.h5"):
     # Determine the platform-specific data directory
     data_dir = user_data_dir(appName, appauthor=False)
     os.makedirs(data_dir, exist_ok=True)  # Ensure the directory exists
     return os.path.join(data_dir, fileName)
 
+# turns date string into an appropriate format for h5 file
 def convert_date_string(dateStr):
     parsedDate = datetime.strptime(dateStr, "%d-%b-%Y")
     parsedDate = parsedDate.strftime("%Y%m%d")
     return parsedDate
 
+# save WellData obj to h5
 def save_new_WellData(wellData, filepath):
     serializedObj = pickle.dumps(wellData)
     serializedArray = np.frombuffer(serializedObj, dtype='uint8')
@@ -91,6 +92,7 @@ def save_new_WellData(wellData, filepath):
         group.create_dataset(plateNo, data=serializedArray)
         group.attrs["version"] = version("PharmOps")
 
+# save DrugReports obj to h5
 def save_new_DrugReport(drugRep, filepath):
     serializedObj = pickle.dumps(drugRep)
     serializedArray = np.frombuffer(serializedObj, dtype='uint8')
@@ -102,6 +104,7 @@ def save_new_DrugReport(drugRep, filepath):
         grp = group.create_dataset(parsedDate, data=serializedArray)
         group.attrs["version"] = version("PharmOps")
 
+# load existing DrugReports from h5 via unserializing 
 def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
     with h5py.File(filepath, "r") as h5file:
         if drugName not in h5file["reports"]:
@@ -114,6 +117,7 @@ def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
     loadedRawData = pickle.loads(serializedArray.tobytes())
     return loadedRawData
 
+# all of these methods below are deprecated and exist in bindMods.SummaryTable now
 def find_excel_header(row, header):
     indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
     return indices
@@ -123,7 +127,7 @@ def extract_mean_and_sem(row, identifier):
     sem = find_excel_header(row, "sem")
     idCol = find_excel_header(row, identifier)
 
-
+#
 def load_binding_summary_excel(filepath):
     allowedNames = ("5HT1A", "5HT2A", "5HT2B", "5HT2C", "D1", "D2", "D3", "D4.4")
     workbook = pxl.load_workbook(filepath, data_only=True)
@@ -186,7 +190,6 @@ def make_function_table(srcDir):
                 continue
             workbook = pxl.load_workbook(srcDir + "\\" + file, data_only=True)
             parse_wb_sheets(workbook)
-
 
 def parse_wb_sheets(workbook, summary):
     summaryDict = {}

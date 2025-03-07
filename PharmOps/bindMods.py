@@ -117,6 +117,7 @@ class DrugReports:
         self.specific = self.specific[0].tolist()
         self.pctTotal = self.pctTotal[0].tolist()
 
+# Produces summary tables for NIDA reports
 class SummaryTable:
     receptors = ["D1", "D2", "D3", "D4", 
                  "1A", "2A", "2B", "2C"]
@@ -131,6 +132,7 @@ class SummaryTable:
             self.import_binding_data()
             self.import_function_data()
 
+    # the property 'summary' is used to build all the summary tables, it stores information scraped from xlsx
     def add_receptor(self, drugID, receptor):
         if drugID not in self.summary:
             self.summary[drugID] = {}
@@ -146,10 +148,12 @@ class SummaryTable:
                     }
             }
 
+    # identifies the columns within a particular row that contain the given header
     def find_excel_header(self, row, header):
         indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
         return indices
     
+    # extracts the name of the drug from the first column for a given group.
     def find_drug_name(self, sheet, idx):
         drugID = sheet.cell(row = idx+1, column=1).value
         if not drugID:
@@ -157,13 +161,13 @@ class SummaryTable:
         while not drugID:
             temp = temp-1
             drugID = sheet.cell(row = temp+1, column=1).value
-        
         drugID = str(drugID).splitlines()
         return drugID[0]
 
+    # uses string format magic to round a number to a string based on the number of significant figures
     def round_sig(self, x, sigFigs):
         print(x)
-        if not x or x=="#DIV/0!" or x=='#VALUE!':
+        if not x or x=='#DIV/0!' or x=='#VALUE!':
             return '0'
         rounded = '{:g}'.format(float('{:.{p}g}'.format(x, p=sigFigs)))
         if len(rounded) < sigFigs and '.' not in rounded:
@@ -172,6 +176,7 @@ class SummaryTable:
             rounded = rounded + '0'
         return rounded
     
+    # allows users to select which files contain binding data
     def import_binding_data(self):
         loadMorePrompt = True
         while loadMorePrompt:
@@ -180,6 +185,7 @@ class SummaryTable:
             self.parse_binding_table(workbook)
             loadMorePrompt = messagebox.askyesno("Load more binding data?")
 
+    # makes sure sheets are named according to allowed receptors (deprecated if using TemplateGenerator)
     def parse_binding_table(self, workbook):
         for name in workbook.sheetnames:
             matchingReceptor = [isinstance(item, str) and re.search(item, name, re.IGNORECASE) for item in self.receptors]
@@ -193,6 +199,7 @@ class SummaryTable:
                 receptorName = str(receptorName)
             self.parse_binding_summary_sheet(sheet, receptorName)
         
+    # goes through a binding sheet to extract data for summary table
     def parse_binding_summary_sheet(self, sheet, receptor):
         for idx, row in enumerate(sheet.iter_rows(values_only=True)):
             ic50 = self.find_excel_header(row, "ic50")
@@ -215,6 +222,7 @@ class SummaryTable:
                 self.summary[drugID][receptor]["mean"]["binding"]["hillSlope"] = hillAverage
                 self.summary[drugID][receptor]["sem"]["binding"]["hillSlope"] = hillSEM
 
+    # produces summary table for scraped binding data after parsing excel
     def make_binding_summary_tables(self):
         meanPrecision = 3
         semPrecision = 2
@@ -247,12 +255,12 @@ class SummaryTable:
                         colLabels=df.columns,
                         loc='center',
                         cellLoc='center')
-            table.auto_set_font_size(False)
-            table.set_fontsize(12)
+            table = self.format_table(table, len(df.columns))
             ax.set_axis_off()
             plt.tight_layout()
-            plt.savefig(f'..\sample data\{drug}_binding_table.png', bbox_inches='tight')
+            plt.savefig(f'{self.srcDir}\{drug}_binding_table.png', bbox_inches='tight')
 
+    # allows users to specify which files contain function data
     def import_function_data(self):
         loadMorePrompt = True
         while loadMorePrompt:
@@ -262,6 +270,7 @@ class SummaryTable:
             self.parse_function_table(workbook)
             loadMorePrompt = messagebox.askyesno("Load more function data?")
 
+    # makes sure sheets are named according to allowed receptors (deprecated if using TemplateGenerator)
     def parse_function_table(self, workbook):
         matchingFilename = [isinstance(item, str) and re.search(item, workbook.name, re.IGNORECASE) for item in self.receptors]
         for name in workbook.sheetnames:
@@ -280,13 +289,13 @@ class SummaryTable:
                 receptorName = str(receptorName)
             self.parse_function_summary_sheet(sheet, receptorName)
 
+    # goes through a function sheet to extract data for summary table
     def parse_function_summary_sheet(self, sheet, receptor):
-        print(receptor)
         for idx, row in enumerate(sheet.iter_rows(values_only=True)):
             ec50 = self.find_excel_header(row, "ec50")
             ic50 = self.find_excel_header(row, "ic50")
             pctVal = self.find_excel_header(row, "%")
-            ave = self.find_excel_header(row, "ave")
+            ave = self.find_excel_header(row, "mean")
             sem = self.find_excel_header(row, "sem")
             if (ec50 or ic50) and ave and sem:
                 drugID = self.find_drug_name(sheet, idx)
@@ -312,6 +321,7 @@ class SummaryTable:
                 self.summary[drugID][receptor]["mean"]["function"]["pctInhib"] = pctInhibAverage
                 self.summary[drugID][receptor]["sem"]["function"]["pctInhib"] = pctInhibSEM
 
+    # produces summary table for scraped function data after parsing excel
     def make_function_summary_tables(self):
         meanPrecision = 3
         semPrecision = 2
@@ -339,38 +349,45 @@ class SummaryTable:
                                 ic50.append(outputStr)
                             case('pctInhib'):
                                 pctInhib.append(outputStr)
-            df['Agonist EC₅₀ (nM) ± SEM'] = ec50
+            df['Agonist EC₅₀\n(nM) ± SEM'] = ec50
             df['% Stimulation'] = pctStim
-            df['Antagonist IC₅₀ (nM) ± SEM'] = ic50
+            df['Antagonist IC₅₀\n(nM) ± SEM'] = ic50
             df['% Inhibition'] = pctInhib
             fig, ax = plt.subplots()
             table = ax.table(cellText=df.values,
                         colLabels=df.columns,
                         loc='center',
                         cellLoc='center')
-            table.auto_set_font_size(False)
-            table.set_fontsize(12)
+            table = self.format_table(table, len(df.columns))
             ax.set_axis_off()
             plt.tight_layout()
-            plt.savefig(f'..\sample data\{drug}_function_table.png', bbox_inches='tight')
+            plt.savefig(f'{self.srcDir}\{drug}_function_table.png', bbox_inches='tight')
 
+    def format_table(self, table, columns):
+        table.auto_set_font_size(False)
+        table.set_fontsize(12)
+        table.auto_set_column_width(col=list(range(columns)))
+        for r in range(0, columns):
+            cell = table[0, r]
+            cell.set_height(0.13)
+        return table
+# Produces blank excel spreadsheets to be later used by SummaryTable objects
 class TemplateGenerator:
-    def __init__(self, saveDir=r'E:/pharmacodynamics/sample data/summary table/'):
-        self.assayEdges = [34485, 34494]
-        self.assayRange = range(self.assayEdges[0], self.assayEdges[1]+1)
-        self.saveDir = saveDir
-        self.blankRows = 12
+    def __init__(self, saveDir=r'E:/summary table/', assayEdges=[34485, 34494]):
+        self.saveDir = saveDir                                              # where blank tables will get saved
+        self.assayRange = range(assayEdges[0], assayEdges[1]+1)             # IDs of blinded NIDA drugs
+        self.blankRows = 12                                                 # controls how many blank rows appear for each drug
         self.bindingDA = pxl.Workbook()
         self.binding5HT = pxl.Workbook()
         self.functionDA = pxl.Workbook()
-        self.function5HT = pxl.Workbook()
-        self.receptorsDA = ['D1', 'D2', 'D3', 'D4.4']
-        self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C']
+        self.function5HT = pxl.Workbook()   
+        self.receptorsDA = ['D1', 'D2', 'D3', 'D4.4'] 
+        self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C'] 
         self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '']
         self.bindingTemplate = ['', 'Date', 
-                        'IC50', 'Average', 'SEM', 
-                        '[radioligand]', 'Ki', 'Average', 'SEM', 
-                        'Hill slope', 'Average', 'SEM', 
+                        'IC50', 'Mean', 'SEM', 
+                        '[radioligand]', 'Ki', 'Mean', 'SEM', 
+                        'Hill slope', 'Mean', 'SEM', 
                         'Initials/Special Conditions']
         self.agonistTemplate = ['', 'Date', 
                            'EC50', 'Mean', 'SEM', 
@@ -379,7 +396,7 @@ class TemplateGenerator:
                            'Notes']
         self.antagonistTemplate = ['', 'Date', 
                               'IC50', 'Mean', 'SEM',
-                              'Top of curve', 'Standard % Agonist',
+                              'Top of curve', 'Standard Pct Agonist',
                               '% reversal', 'Mean', 'SEM',
                               'Notes']
         self.bindingRow = ['Drug range', '', 'Radioligand']
@@ -388,12 +405,12 @@ class TemplateGenerator:
         self.ligandConcCol = 'F'
         self.maxEffectCol = 'F'
         self.standardCol = 'G'
-        self.tempConcentration = 1   # This is controlling the value of the competing ligand constant for now, needs to be remapped to a real value
         self.make_binding_template("DA")
         self.make_binding_template("5HT")
         self.make_function_template("DA")
         self.make_function_template("5HT")
 
+    # Can produce binding templates for 5HT or DA
     def make_binding_template(self, receptor):
         match(receptor):
             case("DA"):
@@ -427,6 +444,7 @@ class TemplateGenerator:
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
 
+    # Can produce function templates for 5HT or DA
     def make_function_template(self, receptor):
         match(receptor):
             case("DA"):
@@ -472,6 +490,7 @@ class TemplateGenerator:
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'function_template_' + receptor + '.xlsx')
 
+    # dictionary to store the formulae that populate the template worksheets in various combinations
     def add_formula(self, calculation, column=None, row=None):
         calculationDict = {
             'Mean': f'=AVERAGEIF({column}{self.startRange}:{column}{self.endRange}, \"<>0\")', 
@@ -483,6 +502,7 @@ class TemplateGenerator:
         formula = calculationDict[calculation]
         return formula
 
+    # Places the appropriate mean and sem columns for a given worksheet
     def populate_value_headers(self, worksheet, row, columns):
         startingCell = ord('A')
         for i in columns:
