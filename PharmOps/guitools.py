@@ -72,7 +72,7 @@ class BindingGUI:
     
     # loads new window from WellDataGUI class to import WellData from text file
     def import_WellData(self):
-        fileName = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
+        fileName = filedialog.askopenfilename(initialdir=r"e:/PharmOps-sample-data/sample data", 
                                               title='Select a file', 
                                               filetypes=(("Text files",
                                                         "*.txt*"),
@@ -182,13 +182,13 @@ class BindingGUI:
 
     # will make summary tables - unclear if this will remain here
     def generate_summary_tables(self):
-        filepathDAR = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
+        filepathDAR = filedialog.askopenfilename(initialdir=r"e:/PharmOps-sample-data/sample data", 
                                               title='Select a DAR summary sheet: ', 
                                               filetypes=(("Excel Files",
                                                         "*.xlsx*"),
                                                        ("all files",
                                                         "*.*")))
-        filepath5HT = filedialog.askopenfilename(initialdir=r"e:/pharmacodynamics/sample data", 
+        filepath5HT = filedialog.askopenfilename(initialdir=r"e:/PharmOps-sample-data/sample data", 
                                               title='Select a 5HT summary sheet: ', 
                                               filetypes=(("Excel Files",
                                                         "*.xlsx*"),

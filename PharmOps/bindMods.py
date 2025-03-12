@@ -1,6 +1,7 @@
 import numpy as np
 from tkinter import messagebox, filedialog
 import openpyxl as pxl
+from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 import re
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -373,7 +374,7 @@ class SummaryTable:
         return table
 # Produces blank excel spreadsheets to be later used by SummaryTable objects
 class TemplateGenerator:
-    def __init__(self, saveDir=r'E:/summary table/', assayEdges=[34485, 34494]):
+    def __init__(self, saveDir=r'E:/PharmOps-sample-data/summary table/', assayEdges=[34485, 34494]):
         self.saveDir = saveDir                                              # where blank tables will get saved
         self.assayRange = range(assayEdges[0], assayEdges[1]+1)             # IDs of blinded NIDA drugs
         self.blankRows = 12                                                 # controls how many blank rows appear for each drug
@@ -409,6 +410,7 @@ class TemplateGenerator:
         self.make_binding_template("5HT")
         self.make_function_template("DA")
         self.make_function_template("5HT")
+        self.currentWB = []
 
     # Can produce binding templates for 5HT or DA
     def make_binding_template(self, receptor):
@@ -423,23 +425,29 @@ class TemplateGenerator:
         ws1.title = receptorList[0]
         for i in range(1, 4):
             wb.create_sheet(receptorList[i])
+        self.currentWB = wb
         for sheet in receptorList:
             ws = wb[sheet]
             ws.append(self.sheetTemplate)
+            self.format_cell(sheet, 1, [1, 3, 5, 7], 'Title')
             ws.cell(row=1, column=7, value = 'Kd(nM)=')
             ws.append(self.bindingRow)
+            self.format_cell(sheet, 2, [1, 3], 'Title')
             ws.append([])
             startingRow = 4
             for i in self.assayRange:
                 self.startRange = startingRow + 1
                 self.endRange = startingRow + self.blankRows + 1
                 ws.append(self.bindingTemplate)
+                self.format_cell(sheet, startingRow, range(1, 16), 'Header')
                 ws.cell(row=ws.max_row, column=1, value=i)
                 ws.append([])
                 ws.cell(row=ws.max_row+1, column=7, 
                         value=self.add_formula('Ki', 'C', ws.max_row+1))
+                self.format_cell(sheet, startingRow+1, [3, 6, 7, 10], 'Table')
                 for i in range(0, self.blankRows):
                     ws.append([])
+                    self.format_cell(sheet, startingRow+2+i, [3, 6, 7, 10], 'Table')
                 self.populate_value_headers(ws, startingRow+1, ['C', 'G', 'J'])
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
@@ -513,3 +521,31 @@ class TemplateGenerator:
                     value=self.add_formula('Mean', i))
             worksheet.cell(row=row, column = semCell, 
                     value=self.add_formula('SEM', i))
+            
+    def format_cell(self, sheet, row, columns, spec):
+
+        def apply_formatting(cell, dict):
+            for key, element in dict.items():
+                exec(f"cell.{key} = element")
+                
+        defaultFont = "Arial"
+        tableBorder = Side(border_style="thin", color="000000")
+        headerBorder = Side(border_style="thick", color="000000")
+        formatDict = {
+            'Title':{'font':Font(name=defaultFont, size=14, bold=True, color="000000")},
+            'Header':{
+                'font':Font(name=defaultFont, size=12, bold=True, color="000000"),
+                'border':Border(left=tableBorder, right=tableBorder, top=headerBorder, bottom=headerBorder)
+                },
+            'Table':{
+                'font':Font(name=defaultFont, size=12, bold=False, color="000000"),
+                'border':Border(left=tableBorder, right=tableBorder)
+                },
+            'Highlight':{
+                'font':Font(name="Arial", size=12, bold=False, color="FF0000")
+                }
+        }
+        currentFormat = formatDict[spec]
+        for col in columns:
+            currentCell = self.currentWB[sheet].cell(row=row, column=col)
+            apply_formatting(currentCell, currentFormat)
