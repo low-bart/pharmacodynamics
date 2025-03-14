@@ -385,6 +385,7 @@ class TemplateGenerator:
         self.receptorsDA = ['D1', 'D2', 'D3', 'D4.4'] 
         self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C'] 
         self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '']
+        #self.titleCols = map(not, self.sheetTemplate)
         self.bindingTemplate = ['', 'Date', 
                         'IC50', 'Mean', 'SEM', 
                         '[radioligand]', 'Ki', 'Mean', 'SEM', 
@@ -410,7 +411,6 @@ class TemplateGenerator:
         self.make_binding_template("5HT")
         self.make_function_template("DA")
         self.make_function_template("5HT")
-        self.currentWB = []
 
     # Can produce binding templates for 5HT or DA
     def make_binding_template(self, receptor):
@@ -426,29 +426,29 @@ class TemplateGenerator:
         for i in range(1, 4):
             wb.create_sheet(receptorList[i])
         self.currentWB = wb
-        for sheet in receptorList:
-            ws = wb[sheet]
-            ws.append(self.sheetTemplate)
+        for sheetName in receptorList:
+            sheet = wb[sheetName]
+            sheet.append(self.sheetTemplate)
             self.format_cell(sheet, 1, [1, 3, 5, 7], 'Title')
-            ws.cell(row=1, column=7, value = 'Kd(nM)=')
-            ws.append(self.bindingRow)
+            sheet.cell(row=1, column=7, value = 'Kd(nM)=')
+            sheet.append(self.bindingRow)
             self.format_cell(sheet, 2, [1, 3], 'Title')
-            ws.append([])
+            sheet.append([])
             startingRow = 4
             for i in self.assayRange:
                 self.startRange = startingRow + 1
                 self.endRange = startingRow + self.blankRows + 1
-                ws.append(self.bindingTemplate)
+                sheet.append(self.bindingTemplate)
                 self.format_cell(sheet, startingRow, range(1, 16), 'Header')
-                ws.cell(row=ws.max_row, column=1, value=i)
-                ws.append([])
-                ws.cell(row=ws.max_row+1, column=7, 
-                        value=self.add_formula('Ki', 'C', ws.max_row+1))
+                sheet.cell(row=sheet.max_row, column=1, value=i)
+                sheet.append([])
+                sheet.cell(row=sheet.max_row+1, column=7, 
+                        value=self.add_formula('Ki', 'C', sheet.max_row+1))
                 self.format_cell(sheet, startingRow+1, [3, 6, 7, 10], 'Table')
                 for i in range(0, self.blankRows):
-                    ws.append([])
+                    sheet.append([])
                     self.format_cell(sheet, startingRow+2+i, [3, 6, 7, 10], 'Table')
-                self.populate_value_headers(ws, startingRow+1, ['C', 'G', 'J'])
+                self.populate_value_headers(sheet, startingRow+1, ['C', 'G', 'J'])
                 startingRow = startingRow + self.blankRows + 2
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
 
@@ -472,27 +472,37 @@ class TemplateGenerator:
             wsAgonist.append(self.sheetTemplate)
             wsAgonist.append(self.functionRow)
             wsAgonist.append([])
+            self.format_cell(wsAgonist, 1, [1, 3, 5, 7], 'Title')
+            self.format_cell(wsAgonist, 2, [1], 'Title')
             wsAntagonist = wb[sheet + ' antagonist']
             wsAntagonist.append(self.sheetTemplate)
             wsAntagonist.append(self.functionRow)
             wsAntagonist.append([])
+            self.format_cell(wsAntagonist, 1, [1, 3, 5, 7], 'Title')
+            self.format_cell(wsAntagonist, 2, [1], 'Title')
             startingRow = 4
             for i in self.assayRange:
                 self.startRange = startingRow + 1
                 self.endRange = startingRow + self.blankRows + 1
                 wsAgonist.append(self.agonistTemplate)
                 wsAgonist.cell(row=wsAgonist.max_row, column=1, value=i)
+                self.format_cell(wsAgonist, startingRow, range(1, 16), 'Header')
                 wsAntagonist.append(self.antagonistTemplate)
                 wsAntagonist.cell(row=wsAntagonist.max_row, column=1, value=i)
+                self.format_cell(wsAntagonist, startingRow, range(1, 16), 'Header')
                 wsAgonist.append([])
                 wsAgonist.cell(row=wsAgonist.max_row+1, column=8, 
                                 value=self.add_formula('pctMax', column=None, row=wsAgonist.max_row+1))
+                self.format_cell(wsAgonist, startingRow+1, [3, 6, 7], 'Table')
                 wsAntagonist.append([])
                 wsAntagonist.cell(row=wsAntagonist.max_row+1, column=8, 
                                 value=self.add_formula('pctReversal', column=None, row=wsAntagonist.max_row+1))
+                self.format_cell(wsAntagonist, startingRow+1, [3, 6, 7], 'Table')
                 for i in range(0, self.blankRows):
                     wsAgonist.append([])
+                    self.format_cell(wsAgonist, startingRow+2+i, [3, 6, 7], 'Table')
                     wsAntagonist.append([])
+                    self.format_cell(wsAntagonist, startingRow+2+i, [3, 6, 7], 'Table')
                 self.populate_value_headers(wsAgonist, startingRow+1, ['C', 'H'])
                 self.populate_value_headers(wsAntagonist, startingRow+1, ['C', 'H'])
                 startingRow = startingRow + self.blankRows + 2
@@ -531,6 +541,7 @@ class TemplateGenerator:
         defaultFont = "Arial"
         tableBorder = Side(border_style="thin", color="000000")
         headerBorder = Side(border_style="thick", color="000000")
+        highlightBorder = Side(border_style="double", color="000000")
         formatDict = {
             'Title':{'font':Font(name=defaultFont, size=14, bold=True, color="000000")},
             'Header':{
@@ -542,10 +553,11 @@ class TemplateGenerator:
                 'border':Border(left=tableBorder, right=tableBorder)
                 },
             'Highlight':{
-                'font':Font(name="Arial", size=12, bold=False, color="FF0000")
+                'font':Font(name="Arial", size=12, bold=False, color="FF0000"),
+                'border':Border(left=highlightBorder, right=highlightBorder, top=highlightBorder, bottom=highlightBorder)
                 }
         }
         currentFormat = formatDict[spec]
         for col in columns:
-            currentCell = self.currentWB[sheet].cell(row=row, column=col)
+            currentCell = sheet.cell(row=row, column=col)
             apply_formatting(currentCell, currentFormat)
