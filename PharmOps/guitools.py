@@ -404,3 +404,36 @@ class CustomTable(tk.Frame):
                 self.selectedCells.add((row, col))
             self.draw_table()
     
+class TemplateGUI:
+    def __init__(self, main):
+        self.availableReceptors = ["D1", "D2", "D3", "D4", 
+                                   "5HT1A", "5HT2A", "5HT2B", "5HT2C"]
+        self.main = main
+        self.bindingTemplateButton = tk.Button(self.main,
+                                               text="Create binding template",
+                                               command=self.create_binding_template)
+        self.bindingTemplateButton.pack()
+        self.bindingStandards = []
+
+    def toggle_button(self, button, state):
+        match(button):
+            case("binding"):
+                button = self.bindingTemplateButton
+            case("function"):
+                pass
+        button["state"] = state
+
+    def build_tabs(self, notebook):
+        for receptor in self.availableReceptors:
+            receptorFrame = ttk.Frame(notebook)
+            notebook.add(receptorFrame, text=receptor)
+        
+
+    def create_binding_template(self):
+        self.bindingTemplateButton["state"] = "disabled"
+        bindingOptions = ttk.Notebook(self.main)
+        self.build_tabs(bindingOptions)
+        bindingOptions.pack(expand=1, fill="both")
+        standardsLabel = tk.Label(bindingOptions, text="Select standards included: ")
+    
+        

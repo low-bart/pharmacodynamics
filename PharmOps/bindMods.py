@@ -498,11 +498,13 @@ class TemplateGenerator:
                 wsAntagonist.cell(row=wsAntagonist.max_row+1, column=8, 
                                 value=self.add_formula('pctReversal', column=None, row=wsAntagonist.max_row+1))
                 self.format_cell(wsAntagonist, startingRow+1, [3, 6, 7], 'Table')
-                for i in range(0, self.blankRows):
+                for i in range(0, self.blankRows-1):
                     wsAgonist.append([])
                     self.format_cell(wsAgonist, startingRow+2+i, [3, 6, 7], 'Table')
                     wsAntagonist.append([])
                     self.format_cell(wsAntagonist, startingRow+2+i, [3, 6, 7], 'Table')
+                wsAgonist.append([])
+                wsAntagonist.append([])
                 self.populate_value_headers(wsAgonist, startingRow+1, ['C', 'H'])
                 self.populate_value_headers(wsAntagonist, startingRow+1, ['C', 'H'])
                 startingRow = startingRow + self.blankRows + 2
