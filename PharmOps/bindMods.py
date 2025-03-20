@@ -167,7 +167,6 @@ class SummaryTable:
 
     # uses string format magic to round a number to a string based on the number of significant figures
     def round_sig(self, x, sigFigs):
-        print(x)
         if not x or x=='#DIV/0!' or x=='#VALUE!':
             return '0'
         rounded = '{:g}'.format(float('{:.{p}g}'.format(x, p=sigFigs)))
@@ -181,7 +180,8 @@ class SummaryTable:
     def import_binding_data(self):
         loadMorePrompt = True
         while loadMorePrompt:
-            fileName = filedialog.askopenfilename(initialdir=self.srcDir)
+            fileName = filedialog.askopenfilename(initialdir=self.srcDir,
+                                                  title="Select binding data: ")
             workbook = pxl.load_workbook(fileName, data_only=True)
             self.parse_binding_table(workbook)
             loadMorePrompt = messagebox.askyesno("Load more binding data?")
@@ -260,12 +260,14 @@ class SummaryTable:
             ax.set_axis_off()
             plt.tight_layout()
             plt.savefig(f'{self.srcDir}\{drug}_binding_table.png', bbox_inches='tight')
-
+            plt.close(fig)
+            
     # allows users to specify which files contain function data
     def import_function_data(self):
         loadMorePrompt = True
         while loadMorePrompt:
-            fileName = filedialog.askopenfilename(initialdir=self.srcDir)
+            fileName = filedialog.askopenfilename(initialdir=self.srcDir,
+                                                  title="Select function data: ")
             workbook = pxl.load_workbook(fileName, data_only=True)
             workbook.name = fileName
             self.parse_function_table(workbook)
@@ -284,10 +286,12 @@ class SummaryTable:
                 receptorName = [self.receptors[i] for i, match in enumerate(matchingFilename) if match]
             elif any(matchingReceptor):
                 receptorName = [self.receptors[i] for i, match in enumerate(matchingReceptor) if match]
+            print(receptorName)
             sheet = workbook[name]
             receptorName = receptorName[0]
             if type(receptorName) is not str:
                 receptorName = str(receptorName)
+            print(receptorName)
             self.parse_function_summary_sheet(sheet, receptorName)
 
     # goes through a function sheet to extract data for summary table
@@ -297,11 +301,12 @@ class SummaryTable:
             ic50 = self.find_excel_header(row, "ic50")
             pctVal = self.find_excel_header(row, "%")
             ave = self.find_excel_header(row, "mean")
+            aveAlt = self.find_excel_header(row, "ave")
             sem = self.find_excel_header(row, "sem")
-            if (ec50 or ic50) and ave and sem:
+            if (ec50 or ic50) and (ave or aveAlt) and sem:
                 drugID = self.find_drug_name(sheet, idx)
                 self.add_receptor(drugID, receptor)
-            if ec50 and ave and sem:
+            if ec50 and (ave or aveAlt) and sem:
                 # relative average and sem indexing to the cells with the datatype's header
                 ec50Average = sheet.cell(row=idx+2, column=ec50[0]+2).value
                 ec50SEM = sheet.cell(row=idx+2, column=ec50[0]+3).value
@@ -311,7 +316,7 @@ class SummaryTable:
                 self.summary[drugID][receptor]["sem"]["function"]["ec50"] = ec50SEM
                 self.summary[drugID][receptor]["mean"]["function"]["pctStim"] = pctStimAverage
                 self.summary[drugID][receptor]["sem"]["function"]["pctStim"] = pctStimSEM
-            elif ic50 and ave and sem:
+            elif ic50 and (ave or aveAlt) and sem:
                 # relative average and sem indexing to the cells with the datatype's header
                 ic50Average = sheet.cell(row=idx+2, column=ic50[0]+2).value
                 ic50SEM = sheet.cell(row=idx+2, column=ic50[0]+3).value
@@ -327,7 +332,6 @@ class SummaryTable:
         meanPrecision = 3
         semPrecision = 2
         for drug, nestedDict in self.summary.items():
-            print(f"Drug: {drug}")
             df = pd.DataFrame()
             df['Receptor'] = list(self.summary[drug].keys())
             ec50 = []
@@ -363,6 +367,7 @@ class SummaryTable:
             ax.set_axis_off()
             plt.tight_layout()
             plt.savefig(f'{self.srcDir}\{drug}_function_table.png', bbox_inches='tight')
+            plt.close(fig)
 
     def format_table(self, table, columns):
         table.auto_set_font_size(False)
@@ -372,6 +377,7 @@ class SummaryTable:
             cell = table[0, r]
             cell.set_height(0.13)
         return table
+    
 # Produces blank excel spreadsheets to be later used by SummaryTable objects
 class TemplateGenerator:
     def __init__(self, saveDir=r'E:/PharmOps-sample-data/summary table/', assayEdges=[34485, 34494]):

@@ -195,13 +195,10 @@ def parse_wb_sheets(workbook, summary):
     summaryDict = {}
     for name in workbook.sheetnames:
         sheet = workbook[name]
-        print(sheet)
         printNext = False
         for row in sheet.iter_rows(values_only=True):
             ec50 = find_excel_header(row, "ec50")
             if printNext:
-                print(row)
                 printNext = False
             if ec50:
                 printNext = True
-                print(row) 

@@ -3,6 +3,8 @@ from tkinter import filedialog, ttk
 from PharmOps import io
 import numpy as np
 import h5py
+from bindMods import SummaryTable
+import os
 
 # Class for the gui window that acts as home screen
 class BindingGUI:
@@ -25,6 +27,11 @@ class BindingGUI:
         self.generateSummaryTableButton = tk.Button(self.frame,
                                                     text="Generate summary tables",
                                                     command=self.generate_summary_tables)
+        self.generateSummaryTableButton.pack()
+        self.generateTemplateButton = tk.Button(self.frame,
+                                                text="Create excel templates",
+                                                command=self.generate_excel_templates)
+        self.generateTemplateButton.pack()
     # creates new window to verify user
     def get_user_info(self):
         userInfo = tk.Toplevel(self.main)
@@ -182,20 +189,18 @@ class BindingGUI:
 
     # will make summary tables - unclear if this will remain here
     def generate_summary_tables(self):
-        filepathDAR = filedialog.askopenfilename(initialdir=r"e:/PharmOps-sample-data/sample data", 
-                                              title='Select a DAR summary sheet: ', 
-                                              filetypes=(("Excel Files",
-                                                        "*.xlsx*"),
-                                                       ("all files",
-                                                        "*.*")))
-        filepath5HT = filedialog.askopenfilename(initialdir=r"e:/PharmOps-sample-data/sample data", 
-                                              title='Select a 5HT summary sheet: ', 
-                                              filetypes=(("Excel Files",
-                                                        "*.xlsx*"),
-                                                       ("all files",
-                                                        "*.*")))
-        bindingDAR = io.load_summary_excel(filepathDAR)
-        binding5HT = io.load_summary_excel(filepath5HT)
+        summaryDir = filedialog.askdirectory(
+            initialdir = os.path.expanduser("~"),
+            title="Select the base directory for summary files: "
+        )
+        summaryObj = SummaryTable(summaryDir)
+        summaryObj.make_binding_summary_tables()
+        summaryObj.make_function_summary_tables()
+
+    def generate_excel_templates(self):
+        newWindow = tk.Toplevel(self.main)
+        TemplateGUI(newWindow)
+        self.main.wait_window(newWindow)
         
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
@@ -408,32 +413,48 @@ class TemplateGUI:
     def __init__(self, main):
         self.availableReceptors = ["D1", "D2", "D3", "D4", 
                                    "5HT1A", "5HT2A", "5HT2B", "5HT2C"]
+        def build_tabs(notebook):
+            for receptor in self.availableReceptors:
+                receptorFrame = ttk.Frame(notebook)
+                notebook.add(receptorFrame, text=receptor)
         self.main = main
+        self.bindingStandards = []
+        self.bindingOptions = ttk.Notebook(self.main)
+        build_tabs(self.bindingOptions)
         self.bindingTemplateButton = tk.Button(self.main,
                                                text="Create binding template",
                                                command=self.create_binding_template)
-        self.bindingTemplateButton.pack()
-        self.bindingStandards = []
-
-    def toggle_button(self, button, state):
-        match(button):
-            case("binding"):
-                button = self.bindingTemplateButton
-            case("function"):
-                pass
-        button["state"] = state
+        self.bindingTemplateButton.grid(row=0, column=0)
+        self.functionOptions = ttk.Notebook(self.main)
+        build_tabs(self.functionOptions)
+        self.functionTemplateButton = tk.Button(self.main, 
+                                                text="Create function template",
+                                                command=self.create_function_template)
+        self.functionTemplateButton.grid(row=1, column=0)
 
     def build_tabs(self, notebook):
+        match(notebook):
+            case(self.bindingOptions):
+                titleStr = "Choose binding options: "
+            case(self.functionOptions):
+                titleStr = "Choose function options: "
         for receptor in self.availableReceptors:
             receptorFrame = ttk.Frame(notebook)
             notebook.add(receptorFrame, text=receptor)
-        
+            ttk.Label(receptorFrame, 
+                      text=titleStr).grid(column=0, 
+                                           row=0, 
+                                           padx=30, 
+                                           pady=30)
 
     def create_binding_template(self):
         self.bindingTemplateButton["state"] = "disabled"
-        bindingOptions = ttk.Notebook(self.main)
-        self.build_tabs(bindingOptions)
-        bindingOptions.pack(expand=1, fill="both")
-        standardsLabel = tk.Label(bindingOptions, text="Select standards included: ")
-    
-        
+        self.functionTemplateButton["state"] = "normal"
+        self.functionOptions.grid_forget()
+        self.bindingOptions.grid(row=2, column=0)
+
+    def create_function_template(self):
+        self.bindingTemplateButton["state"] = "normal"
+        self.functionTemplateButton["state"] = "disabled"
+        self.bindingOptions.grid_forget()
+        self.functionOptions.grid(row=2, column=0)
