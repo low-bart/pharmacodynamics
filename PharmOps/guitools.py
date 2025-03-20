@@ -411,50 +411,82 @@ class CustomTable(tk.Frame):
     
 class TemplateGUI:
     def __init__(self, main):
+        self.main = main
+        self.notebook = ttk.Notebook(self.main)
         self.availableReceptors = ["D1", "D2", "D3", "D4", 
                                    "5HT1A", "5HT2A", "5HT2B", "5HT2C"]
-        def build_tabs(notebook):
-            for receptor in self.availableReceptors:
-                receptorFrame = ttk.Frame(notebook)
-                notebook.add(receptorFrame, text=receptor)
-        self.main = main
+        self.currentMode = ""
+        self.tabModes = {"binding": {}, 
+                         "function": {}}
+        self.standardsListbox = {"binding": {},
+                               "function": {}}
+        self.standardsEntries = {"binding": {},
+                                 "function": {}}
+        for receptor in self.availableReceptors:
+            self.create_tab("binding", receptor)
+            self.create_tab("function", receptor)
+            
         self.bindingStandards = []
-        self.bindingOptions = ttk.Notebook(self.main)
-        build_tabs(self.bindingOptions)
         self.bindingTemplateButton = tk.Button(self.main,
                                                text="Create binding template",
                                                command=self.create_binding_template)
         self.bindingTemplateButton.grid(row=0, column=0)
-        self.functionOptions = ttk.Notebook(self.main)
-        build_tabs(self.functionOptions)
         self.functionTemplateButton = tk.Button(self.main, 
                                                 text="Create function template",
                                                 command=self.create_function_template)
         self.functionTemplateButton.grid(row=1, column=0)
+        self.notebook.grid(row=2, column=0)
 
-    def build_tabs(self, notebook):
-        match(notebook):
-            case(self.bindingOptions):
-                titleStr = "Choose binding options: "
-            case(self.functionOptions):
-                titleStr = "Choose function options: "
-        for receptor in self.availableReceptors:
-            receptorFrame = ttk.Frame(notebook)
-            notebook.add(receptorFrame, text=receptor)
-            ttk.Label(receptorFrame, 
-                      text=titleStr).grid(column=0, 
-                                           row=0, 
-                                           padx=30, 
-                                           pady=30)
+    def create_tab(self, mode, receptor):
+        frame = ttk.Frame(self.notebook)
+        addStandardButton = ttk.Button(frame,
+                          text=f"Add {mode} standard",
+                          command=self.add_standard)
+        addStandardButton.grid(row=0, column=0, sticky="N")
+        standardEntry = ttk.Entry(frame)
+        standardEntry.grid(row=1, column=0, sticky="N")
+        removeStandardButton = ttk.Button(frame,
+                                          text="Remove selected standard",
+                                          command=self.remove_standard)
+        removeStandardButton.grid(row=2, column=0, sticky="S")
+        standardList = tk.Listbox(frame)
+        standardList.grid(row=0, column=1, rowspan=3)
+        self.tabModes[mode][receptor] = frame
+        self.standardsListbox[mode][receptor] = standardList
+        self.standardsEntries[mode][receptor] = standardEntry
+        
+    def switch_tabs(self, mode):
+        for tab in self.notebook.tabs():
+            self.notebook.forget(tab)
+
+        for tabName, frame in self.tabModes[mode].items():
+            self.notebook.add(frame, text=tabName)
 
     def create_binding_template(self):
         self.bindingTemplateButton["state"] = "disabled"
         self.functionTemplateButton["state"] = "normal"
-        self.functionOptions.grid_forget()
-        self.bindingOptions.grid(row=2, column=0)
+        self.switch_tabs("binding")
+        self.currentMode="binding"
 
     def create_function_template(self):
         self.bindingTemplateButton["state"] = "normal"
         self.functionTemplateButton["state"] = "disabled"
-        self.bindingOptions.grid_forget()
-        self.functionOptions.grid(row=2, column=0)
+        self.switch_tabs("function")
+        self.currentMode="function"
+
+    def add_standard(self):
+        currentReceptor = self.notebook.tab(self.notebook.select(), "text")
+        currentEntry = self.standardsEntries[self.currentMode][currentReceptor]
+        currentListbox = self.standardsListbox[self.currentMode][currentReceptor]
+        entryText = currentEntry.get()
+        if entryText == "" or entryText in currentListbox.get(0, tk.END):
+            return
+        currentListbox.insert(tk.END, entryText)
+        currentEntry.delete(0, tk.END)
+    
+    def remove_standard(self):
+        currentReceptor = self.notebook.tab(self.notebook.select(), "text")
+        currentListbox = self.standardsListbox[self.currentMode][currentReceptor]
+        currentSelection = currentListbox.curselection()
+        if currentSelection:
+            currentListbox.delete(currentSelection[0])
