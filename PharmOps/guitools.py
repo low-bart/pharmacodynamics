@@ -3,7 +3,7 @@ from tkinter import filedialog, ttk
 from PharmOps import io
 import numpy as np
 import h5py
-from bindMods import SummaryTable
+from bindMods import SummaryTable, TemplateGenerator
 import os
 
 # Class for the gui window that acts as home screen
@@ -422,20 +422,30 @@ class TemplateGUI:
                                "function": {}}
         self.standardsEntries = {"binding": {},
                                  "function": {}}
+        self.standardsDict = {"binding": {},
+                              "function": {}}
         for receptor in self.availableReceptors:
             self.create_tab("binding", receptor)
             self.create_tab("function", receptor)
             
         self.bindingStandards = []
         self.bindingTemplateButton = tk.Button(self.main,
-                                               text="Create binding template",
-                                               command=self.create_binding_template)
+                                               text="Binding template settings",
+                                               command=self.configure_binding_template)
         self.bindingTemplateButton.grid(row=0, column=0)
         self.functionTemplateButton = tk.Button(self.main, 
-                                                text="Create function template",
-                                                command=self.create_function_template)
+                                                text="Function template settings",
+                                                command=self.configure_function_template)
         self.functionTemplateButton.grid(row=1, column=0)
         self.notebook.grid(row=2, column=0)
+        self.drugRangeLowEntry = ttk.Entry(self.main)
+        self.drugRangeHighEntry = ttk.Entry(self.main)
+        self.drugRangeLowEntry.grid(row=3, column=0)
+        self.drugRangeHighEntry.grid(row=3, column=2)
+        self.createTemplateButton = ttk.Button(self.main,
+                                               text="Create template files",
+                                               command=self.save_templates)
+        self.createTemplateButton.grid(row=4, column=0, columnspan=2)
 
     def create_tab(self, mode, receptor):
         frame = ttk.Frame(self.notebook)
@@ -462,17 +472,17 @@ class TemplateGUI:
         for tabName, frame in self.tabModes[mode].items():
             self.notebook.add(frame, text=tabName)
 
-    def create_binding_template(self):
+        self.currentMode = mode
+        
+    def configure_binding_template(self):
         self.bindingTemplateButton["state"] = "disabled"
         self.functionTemplateButton["state"] = "normal"
         self.switch_tabs("binding")
-        self.currentMode="binding"
 
-    def create_function_template(self):
+    def configure_function_template(self):
         self.bindingTemplateButton["state"] = "normal"
         self.functionTemplateButton["state"] = "disabled"
         self.switch_tabs("function")
-        self.currentMode="function"
 
     def add_standard(self):
         currentReceptor = self.notebook.tab(self.notebook.select(), "text")
@@ -481,8 +491,12 @@ class TemplateGUI:
         entryText = currentEntry.get()
         if entryText == "" or entryText in currentListbox.get(0, tk.END):
             return
+        
         currentListbox.insert(tk.END, entryText)
         currentEntry.delete(0, tk.END)
+        if currentReceptor not in self.standardsDict[self.currentMode]:
+            self.standardsDict[self.currentMode][currentReceptor] = []
+        self.standardsDict[self.currentMode][currentReceptor].append(entryText)
     
     def remove_standard(self):
         currentReceptor = self.notebook.tab(self.notebook.select(), "text")
@@ -490,3 +504,13 @@ class TemplateGUI:
         currentSelection = currentListbox.curselection()
         if currentSelection:
             currentListbox.delete(currentSelection[0])
+            del self.standardsDict[self.currentMode][currentReceptor][currentSelection[0]]
+
+    def save_templates(self):
+        saveDir = filedialog.askdirectory(
+            initialdir = os.path.expanduser("~"),
+            title="Select the directory where your templates will be saved: "
+            )
+        lowRange = int(self.drugRangeLowEntry.get())
+        highRange = int(self.drugRangeHighEntry.get())
+        TemplateGenerator(saveDir, [lowRange, highRange], self.standardsDict)

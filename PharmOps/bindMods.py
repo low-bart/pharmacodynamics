@@ -380,15 +380,22 @@ class SummaryTable:
     
 # Produces blank excel spreadsheets to be later used by SummaryTable objects
 class TemplateGenerator:
-    def __init__(self, saveDir=r'E:/PharmOps-sample-data/summary table/', assayEdges=[34485, 34494]):
+    def __init__(self, 
+                 saveDir=r'E:/PharmOps-sample-data/summary table/', 
+                 assayEdges=[34485, 34494],
+                 standardsDict={"binding": {}, "function": {}}
+                 ):
         self.saveDir = saveDir                                              # where blank tables will get saved
+        if self.saveDir[-1] != "/":
+            self.saveDir += "/"
         self.assayRange = range(assayEdges[0], assayEdges[1]+1)             # IDs of blinded NIDA drugs
+        self.standards = standardsDict
         self.blankRows = 12                                                 # controls how many blank rows appear for each drug
         self.bindingDA = pxl.Workbook()
         self.binding5HT = pxl.Workbook()
         self.functionDA = pxl.Workbook()
         self.function5HT = pxl.Workbook()   
-        self.receptorsDA = ['D1', 'D2', 'D3', 'D4.4'] 
+        self.receptorsDA = ['D1', 'D2', 'D3', 'D4'] 
         self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C'] 
         self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '']
         #self.titleCols = map(not, self.sheetTemplate)
@@ -407,16 +414,45 @@ class TemplateGenerator:
                               'Top of curve', 'Standard Pct Agonist',
                               '% reversal', 'Mean', 'SEM',
                               'Notes']
-        self.bindingRow = ['Drug range', '', 'Radioligand']
-        self.functionRow = ['Drug range']
+        self.bindingRow = [f'{assayEdges[0]}-{assayEdges[1]}', '', 'Radioligand']
+        self.functionRow = [f'{assayEdges[0]}-{assayEdges[1]}']
         self.bindingKdCell = "$H$1"
         self.ligandConcCol = 'F'
         self.maxEffectCol = 'F'
         self.standardCol = 'G'
+        self.startingRow = 4
         self.make_binding_template("DA")
         self.make_binding_template("5HT")
         self.make_function_template("DA")
         self.make_function_template("5HT")
+
+    def add_binding_section(self, sheet, idx):
+        self.startRange = self.startingRow + 1
+        self.endRange = self.startingRow + self.blankRows + 1
+        sheet.append(self.bindingTemplate)
+        self.format_cell(sheet, self.startingRow, range(1, 16), 'Header')
+        sheet.cell(row=sheet.max_row, column=1, value=idx)
+        sheet.append([])
+        sheet.cell(row=sheet.max_row+1, column=7, 
+                value=self.add_formula('Ki', 'C', sheet.max_row+1))
+        self.format_cell(sheet, self.startingRow+1, [3, 6, 7, 10], 'Table')
+        for i in range(0, self.blankRows-1):
+            sheet.append([])
+            self.format_cell(sheet, self.startingRow+2+i, [3, 6, 7, 10], 'Table')
+        sheet.append([])
+        self.populate_value_headers(sheet, self.startingRow+1, ['C', 'G', 'J'])
+        self.startingRow = self.startingRow + self.blankRows + 2
+
+    def add_standards_header(self, sheet):
+        standardFont = Font(name='Arial',
+                            size=12,
+                            bold=True,
+                            underline='single')
+        sheet.append(['Standards'])
+        cell = sheet.cell(row=sheet.max_row, column=1)
+        cell.font = standardFont
+        sheet.append([])
+        self.startingRow += 2
 
     # Can produce binding templates for 5HT or DA
     def make_binding_template(self, receptor):
@@ -433,6 +469,7 @@ class TemplateGenerator:
             wb.create_sheet(receptorList[i])
         self.currentWB = wb
         for sheetName in receptorList:
+            self.startingRow = 4
             sheet = wb[sheetName]
             sheet.append(self.sheetTemplate)
             self.format_cell(sheet, 1, [1, 3, 5, 7], 'Title')
@@ -440,22 +477,13 @@ class TemplateGenerator:
             sheet.append(self.bindingRow)
             self.format_cell(sheet, 2, [1, 3], 'Title')
             sheet.append([])
-            startingRow = 4
             for i in self.assayRange:
-                self.startRange = startingRow + 1
-                self.endRange = startingRow + self.blankRows + 1
-                sheet.append(self.bindingTemplate)
-                self.format_cell(sheet, startingRow, range(1, 16), 'Header')
-                sheet.cell(row=sheet.max_row, column=1, value=i)
-                sheet.append([])
-                sheet.cell(row=sheet.max_row+1, column=7, 
-                        value=self.add_formula('Ki', 'C', sheet.max_row+1))
-                self.format_cell(sheet, startingRow+1, [3, 6, 7, 10], 'Table')
-                for i in range(0, self.blankRows):
-                    sheet.append([])
-                    self.format_cell(sheet, startingRow+2+i, [3, 6, 7, 10], 'Table')
-                self.populate_value_headers(sheet, startingRow+1, ['C', 'G', 'J'])
-                startingRow = startingRow + self.blankRows + 2
+                self.add_binding_section(sheet, i)
+            if sheetName not in self.standards["binding"]:
+                continue
+            self.add_standards_header(sheet)
+            for standard in self.standards["binding"][sheetName]:
+                self.add_binding_section(sheet, standard)
         wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
 
     # Can produce function templates for 5HT or DA

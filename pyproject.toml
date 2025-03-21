@@ -29,7 +29,9 @@ dependencies = [
 "h5py",
 "platformdirs", 
 "importlib-metadata", 
-"tkintertable"
+"tkintertable",
+"openpyxl",
+"matplotlib"
 ]
 
 [project.urls]
