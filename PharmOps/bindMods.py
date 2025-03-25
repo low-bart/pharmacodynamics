@@ -382,13 +382,13 @@ class SummaryTable:
 class TemplateGenerator:
     def __init__(self, 
                  saveDir=r'E:/PharmOps-sample-data/summary table/', 
-                 assayEdges=[34485, 34494],
+                 drugNames=[],
                  standardsDict={"binding": {}, "function": {}}
                  ):
         self.saveDir = saveDir                                              # where blank tables will get saved
         if self.saveDir[-1] != "/":
             self.saveDir += "/"
-        self.assayRange = range(assayEdges[0], assayEdges[1]+1)             # IDs of blinded NIDA drugs
+        self.drugNames = drugNames            # IDs of blinded NIDA drugs
         self.standards = standardsDict
         self.blankRows = 12                                                 # controls how many blank rows appear for each drug
         self.bindingDA = pxl.Workbook()
@@ -414,17 +414,19 @@ class TemplateGenerator:
                               'Top of curve', 'Standard Pct Agonist',
                               '% reversal', 'Mean', 'SEM',
                               'Notes']
-        self.bindingRow = [f'{assayEdges[0]}-{assayEdges[1]}', '', 'Radioligand']
-        self.functionRow = [f'{assayEdges[0]}-{assayEdges[1]}']
+        self.bindingRow = ['Assay description', '', 'Radioligand']
+        self.functionRow = ['Assay description']
         self.bindingKdCell = "$H$1"
         self.ligandConcCol = 'F'
         self.maxEffectCol = 'F'
         self.standardCol = 'G'
         self.startingRow = 4
+        print(self.drugNames)
         self.make_binding_template("DA")
         self.make_binding_template("5HT")
         self.make_function_template("DA")
         self.make_function_template("5HT")
+
 
     def add_binding_section(self, sheet, idx):
         self.startRange = self.startingRow + 1
@@ -477,7 +479,7 @@ class TemplateGenerator:
             sheet.append(self.bindingRow)
             self.format_cell(sheet, 2, [1, 3], 'Title')
             sheet.append([])
-            for i in self.assayRange:
+            for i in self.drugNames:
                 self.add_binding_section(sheet, i)
             if sheetName not in self.standards["binding"]:
                 continue
@@ -515,7 +517,7 @@ class TemplateGenerator:
             self.format_cell(wsAntagonist, 1, [1, 3, 5, 7], 'Title')
             self.format_cell(wsAntagonist, 2, [1], 'Title')
             startingRow = 4
-            for i in self.assayRange:
+            for i in self.drugNames:
                 self.startRange = startingRow + 1
                 self.endRange = startingRow + self.blankRows + 1
                 wsAgonist.append(self.agonistTemplate)
@@ -579,17 +581,17 @@ class TemplateGenerator:
         headerBorder = Side(border_style="thick", color="000000")
         highlightBorder = Side(border_style="double", color="000000")
         formatDict = {
-            'Title':{'font':Font(name=defaultFont, size=14, bold=True, color="000000")},
+            'Title':{'font':Font(name=defaultFont, size=12, bold=True, color="000000")},
             'Header':{
-                'font':Font(name=defaultFont, size=12, bold=True, color="000000"),
+                'font':Font(name=defaultFont, size=11, bold=True, color="000000"),
                 'border':Border(left=tableBorder, right=tableBorder, top=headerBorder, bottom=headerBorder)
                 },
             'Table':{
-                'font':Font(name=defaultFont, size=12, bold=False, color="000000"),
+                'font':Font(name=defaultFont, size=11, bold=False, color="000000"),
                 'border':Border(left=tableBorder, right=tableBorder)
                 },
             'Highlight':{
-                'font':Font(name="Arial", size=12, bold=False, color="FF0000"),
+                'font':Font(name="Arial", size=11, bold=False, color="FF0000"),
                 'border':Border(left=highlightBorder, right=highlightBorder, top=highlightBorder, bottom=highlightBorder)
                 }
         }

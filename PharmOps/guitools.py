@@ -432,20 +432,31 @@ class TemplateGUI:
         self.bindingTemplateButton = tk.Button(self.main,
                                                text="Binding template settings",
                                                command=self.configure_binding_template)
-        self.bindingTemplateButton.grid(row=0, column=0)
+        self.bindingTemplateButton.grid(row=0, column=0, columnspan=2)
         self.functionTemplateButton = tk.Button(self.main, 
                                                 text="Function template settings",
                                                 command=self.configure_function_template)
-        self.functionTemplateButton.grid(row=1, column=0)
-        self.notebook.grid(row=2, column=0)
+        self.functionTemplateButton.grid(row=1, column=0, columnspan=2)
+        self.notebook.grid(row=2, column=0, columnspan=2)
+        self.drugNames = []
+        self.drugRangeLowLabel = ttk.Label(self.main, text="Enter low end of drug range: ")
         self.drugRangeLowEntry = ttk.Entry(self.main)
+        self.drugRangeHighLabel = ttk.Label(self.main, text="Enter high end of drug range: ")
         self.drugRangeHighEntry = ttk.Entry(self.main)
-        self.drugRangeLowEntry.grid(row=3, column=0)
-        self.drugRangeHighEntry.grid(row=3, column=2)
+        self.drugRangeLowLabel.grid(row=3, column=0)
+        self.drugRangeLowEntry.grid(row=3, column=1)
+        self.drugRangeHighLabel.grid(row=4, column=0)
+        self.drugRangeHighEntry.grid(row=4, column=1)
+        self.drugSingleLabel = ttk.Button(self.main, 
+                                          text="Add a new test drug: ", 
+                                          command=self.add_single_drug)
+        self.drugSingleEntry = ttk.Entry(self.main)
+        self.drugSingleLabel.grid(row=5, column=0)
+        self.drugSingleEntry.grid(row=5, column=1)
         self.createTemplateButton = ttk.Button(self.main,
                                                text="Create template files",
                                                command=self.save_templates)
-        self.createTemplateButton.grid(row=4, column=0, columnspan=2)
+        self.createTemplateButton.grid(row=6, column=0, columnspan=2)
 
     def create_tab(self, mode, receptor):
         frame = ttk.Frame(self.notebook)
@@ -473,7 +484,7 @@ class TemplateGUI:
             self.notebook.add(frame, text=tabName)
 
         self.currentMode = mode
-        
+
     def configure_binding_template(self):
         self.bindingTemplateButton["state"] = "disabled"
         self.functionTemplateButton["state"] = "normal"
@@ -506,11 +517,21 @@ class TemplateGUI:
             currentListbox.delete(currentSelection[0])
             del self.standardsDict[self.currentMode][currentReceptor][currentSelection[0]]
 
+    def add_single_drug(self):
+        entryText = self.drugSingleEntry.get()
+        if entryText == "" or entryText in self.drugNames:
+            return
+        self.drugNames.append(entryText)
+        self.drugSingleEntry.delete(0, tk.END)
+
     def save_templates(self):
         saveDir = filedialog.askdirectory(
             initialdir = os.path.expanduser("~"),
             title="Select the directory where your templates will be saved: "
             )
         lowRange = int(self.drugRangeLowEntry.get())
-        highRange = int(self.drugRangeHighEntry.get())
-        TemplateGenerator(saveDir, [lowRange, highRange], self.standardsDict)
+        highRange = int(self.drugRangeHighEntry.get()) + 1
+        for drug in range(lowRange, highRange):
+            print(drug)
+            self.drugNames.append(drug)
+        TemplateGenerator(saveDir, self.drugNames, self.standardsDict)
