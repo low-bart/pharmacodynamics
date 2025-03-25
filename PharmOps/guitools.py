@@ -529,9 +529,12 @@ class TemplateGUI:
             initialdir = os.path.expanduser("~"),
             title="Select the directory where your templates will be saved: "
             )
-        lowRange = int(self.drugRangeLowEntry.get())
-        highRange = int(self.drugRangeHighEntry.get()) + 1
-        for drug in range(lowRange, highRange):
-            print(drug)
-            self.drugNames.append(drug)
+        lowEntry = self.drugRangeLowEntry.get()
+        highEntry = self.drugRangeHighEntry.get()
+        if lowEntry != '' and highEntry != '':
+            lowRange = int(self.drugRangeLowEntry.get())
+            highRange = int(self.drugRangeHighEntry.get()) + 1
+            for drug in range(lowRange, highRange):
+                print(drug)
+                self.drugNames.append(drug)
         TemplateGenerator(saveDir, self.drugNames, self.standardsDict)
