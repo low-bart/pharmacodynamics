@@ -5,6 +5,7 @@ import numpy as np
 import h5py
 from bindMods import SummaryTable, TemplateGenerator
 import os
+import time
 
 # Class for the gui window that acts as home screen
 class BindingGUI:
@@ -32,6 +33,10 @@ class BindingGUI:
                                                 text="Create excel templates",
                                                 command=self.generate_excel_templates)
         self.generateTemplateButton.pack()
+        self.labelTriplicatesButton = tk.Button(self.frame,
+                                                text="Label triplicate date",
+                                                command=self.parse_triplicates)
+        self.labelTriplicatesButton.pack()
     # creates new window to verify user
     def get_user_info(self):
         userInfo = tk.Toplevel(self.main)
@@ -201,6 +206,69 @@ class BindingGUI:
         newWindow = tk.Toplevel(self.main)
         TemplateGUI(newWindow)
         self.main.wait_window(newWindow)
+
+    def parse_triplicates(self):
+        wellDataList = io.read_raw_well_txt(r"e:\PharmOps-sample-data\sample data\110824_raw data.txt")
+        plate = wellDataList[0]
+        newWindow = tk.Toplevel(self.main)
+        TriplicateGUI(newWindow, plate)
+        self.main.wait_window(newWindow)
+
+# allows for manual entry of triplicate data and concentrations
+class TriplicateGUI:
+    def __init__(self, main, plate):
+        self.main = main
+        self.dataFrame = tk.Frame(self.main)
+        self.entryFrame = tk.Frame(self.main)
+        self.dataFrame.pack(fill="both", expand="yes")
+        self.entryFrame.pack(fill="both", expand="yes")
+        self.columns = ["1", "2", "3"]
+        self.tree = ttk.Treeview(self.dataFrame, columns=self.columns, show="headings")
+        self.plate = plate
+        plateData = plate.data.reset_index(drop=True)
+        self.dataDict = {}
+        self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
+        for rowIdx, row in plateData.iterrows():
+            numCols = 4
+            for triplicate in range(0, numCols):
+                self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
+        self.customTable = CustomTable(self.dataFrame, self.originalData, showData=False)
+        self.customTable.pack()
+        print(self.dataDict)
+        for col in self.columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=120, anchor = "center")
+        self.tree.pack()
+        self.changeButton = tk.Button(self.entryFrame,
+                                      text="cycle through dictionary",
+                                      command=self.cycle_data)
+        self.changeButton.pack()
+        self.currentKey = (0, 0)
+        self.customTable.update_highlights([(0, 0), (0, 1), (0, 2)])
+        self.tree.insert("", "end", values = self.dataDict[self.currentKey])
+    
+    def cycle_data(self):
+        rowIdx = self.currentKey[0]
+        tripIdx = self.currentKey[1]
+        if rowIdx >= 7 and tripIdx >= 3:
+            return
+        if tripIdx >= 3:
+            tripIdx = 0
+            rowIdx += 1
+        else:
+            tripIdx += 1
+        self.currentKey = (rowIdx, tripIdx)
+            
+        testData = self.dataDict[self.currentKey]
+        tupleList = []
+        for i in range(0, 3):
+            tupleList.append(tuple(map(sum, zip(self.currentKey, (0, self.currentKey[1] * 3 + i - self.currentKey[1])))))
+        self.customTable.update_highlights(tupleList)
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        
+        self.tree.insert("", "end", values=testData)
+
         
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
@@ -369,19 +437,24 @@ class DrugReportsGUI:
 
 # Allows for custom behavior in tabular data like cell selection and highlighting
 class CustomTable(tk.Frame):
-    def __init__(self, parent, data):
+    def __init__(self, parent, data, showData = True):
         super().__init__(parent)
 
         self.data = data
         self.selectedCells = set()
-        self.cellWidth = 60
-        self.cellHeight = 30
 
         self.canvas = tk.Canvas(self, bg="white", bd=0, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.showData = showData
+        if self.showData:
+            self.cellWidth = 60
+            self.cellHeight = 30
+            self.canvas.bind("<Button-1>", self.handle_click)
+        else:
+            self.cellWidth = 30
+            self.cellHeight = 15
 
         self.draw_table()
-        self.canvas.bind("<Button-1>", self.handle_click)
     
     def draw_table(self):
         self.canvas.delete("all")
@@ -393,7 +466,8 @@ class CustomTable(tk.Frame):
             y2 = y1 + self.cellHeight
 
             self.canvas.create_rectangle(x1, y1, x2, y2, outline="black", width=1)
-            self.canvas.create_text(x1 + self.cellWidth/2, y1 + self.cellHeight/2, text=value)
+            if self.showData:
+                self.canvas.create_text(x1 + self.cellWidth/2, y1 + self.cellHeight/2, text=value)
             
             if (row, col) in self.selectedCells:
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=3)
@@ -409,6 +483,13 @@ class CustomTable(tk.Frame):
                 self.selectedCells.add((row, col))
             self.draw_table()
     
+    def update_highlights(self, indices):
+        self.selectedCells = set()
+        for tup in indices:
+            self.selectedCells.add(tup)
+        self.draw_table()
+
+# used to create excel templates for nida/dea assays
 class TemplateGUI:
     def __init__(self, main):
         self.main = main
@@ -535,6 +616,6 @@ class TemplateGUI:
             lowRange = int(self.drugRangeLowEntry.get())
             highRange = int(self.drugRangeHighEntry.get()) + 1
             for drug in range(lowRange, highRange):
-                print(drug)
                 self.drugNames.append(drug)
         TemplateGenerator(saveDir, self.drugNames, self.standardsDict)
+

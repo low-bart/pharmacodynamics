@@ -385,12 +385,12 @@ class TemplateGenerator:
                  drugNames=[],
                  standardsDict={"binding": {}, "function": {}}
                  ):
-        self.saveDir = saveDir                                              # where blank tables will get saved
+        self.saveDir = saveDir
         if self.saveDir[-1] != "/":
             self.saveDir += "/"
-        self.drugNames = drugNames            # IDs of blinded NIDA drugs
+        self.drugNames = drugNames
         self.standards = standardsDict
-        self.blankRows = 12                                                 # controls how many blank rows appear for each drug
+        self.blankRows = 3                  
         self.bindingDA = pxl.Workbook()
         self.binding5HT = pxl.Workbook()
         self.functionDA = pxl.Workbook()
@@ -421,7 +421,6 @@ class TemplateGenerator:
         self.maxEffectCol = 'F'
         self.standardCol = 'G'
         self.startingRow = 4
-        print(self.drugNames)
         self.make_binding_template("DA")
         self.make_binding_template("5HT")
         self.make_function_template("DA")
