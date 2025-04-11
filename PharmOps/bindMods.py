@@ -5,6 +5,9 @@ from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 import re
 import matplotlib.pyplot as plt
 import pandas as pd
+import xlwings as xw
+import traceback
+import os
 
 # This class is intended to synchronize WellData and corresponding DrugReports metadata
 class AssayMetadata:
@@ -390,7 +393,7 @@ class TemplateGenerator:
             self.saveDir += "/"
         self.drugNames = drugNames
         self.standards = standardsDict
-        self.blankRows = 3                  
+        self.blankRows = 2                  
         self.bindingDA = pxl.Workbook()
         self.binding5HT = pxl.Workbook()
         self.functionDA = pxl.Workbook()
@@ -422,9 +425,9 @@ class TemplateGenerator:
         self.standardCol = 'G'
         self.startingRow = 4
         self.make_binding_template("DA")
-        self.make_binding_template("5HT")
-        self.make_function_template("DA")
-        self.make_function_template("5HT")
+        #self.make_binding_template("5HT")
+        #self.make_function_template("DA")
+        #self.make_function_template("5HT")
 
 
     def add_binding_section(self, sheet, idx):
@@ -485,7 +488,10 @@ class TemplateGenerator:
             self.add_standards_header(sheet)
             for standard in self.standards["binding"][sheetName]:
                 self.add_binding_section(sheet, standard)
-        wb.save(self.saveDir + 'binding_template_' + receptor + '.xlsx')
+        fileName = self.saveDir + 'binding_template_' + receptor
+        wb.save(fileName + '.xlsx')
+        wb.close()
+        self.add_macros(fileName, receptor)
 
     # Can produce function templates for 5HT or DA
     def make_function_template(self, receptor):
@@ -543,7 +549,10 @@ class TemplateGenerator:
                 self.populate_value_headers(wsAgonist, startingRow+1, ['C', 'H'])
                 self.populate_value_headers(wsAntagonist, startingRow+1, ['C', 'H'])
                 startingRow = startingRow + self.blankRows + 2
-        wb.save(self.saveDir + 'function_template_' + receptor + '.xlsx')
+        fileName = self.saveDir + 'function_template_' + receptor
+        wb.save(fileName + '.xlsx')
+        wb.close()
+        self.add_macros(fileName, receptor)
 
     # dictionary to store the formulae that populate the template worksheets in various combinations
     def add_formula(self, calculation, column=None, row=None):
@@ -598,3 +607,106 @@ class TemplateGenerator:
         for col in columns:
             currentCell = sheet.cell(row=row, column=col)
             apply_formatting(currentCell, currentFormat)
+
+    def add_macros(self, fileName, receptor):
+        match receptor:
+            case("DA"):
+                sheetNames = self.receptorsDA
+            case("5HT"):
+                sheetNames = self.receptors5HT
+        vbaCode = """
+            Private Sub Worksheet_Change(ByVal Target As Range)
+                Dim ws As Worksheet
+                Dim insertRow As Long
+                Dim wasEmpty As Boolean
+                Dim cell As Range
+
+                Set ws = Me
+
+                ' Avoid re-triggering the event
+                Application.EnableEvents = False
+
+                ' Only proceed if one cell was changed
+                If Target.Cells.Count = 1 Then
+                    insertRow = Target.Row
+
+                    ' Check if the rest of the row was empty (excluding the changed cell)
+                    wasEmpty = True
+                    For Each cell In ws.Rows(insertRow).Cells
+                        If cell.Address <> Target.Address And Not IsEmpty(cell.Value) Then
+                            wasEmpty = False
+                            Exit For
+                        End If
+                    Next cell
+
+                    ' If the row was otherwise empty before this change, trigger the insert
+                    If wasEmpty Then
+                        ws.Rows(insertRow + 1).Insert Shift:=xlDown, CopyOrigin:=xlFormatFromLeftOrAbove
+                    End If
+                End If
+
+                Application.EnableEvents = True
+            End Sub
+        """
+        try:
+            app = xw.App(visible=False)
+            book = app.books.open(fileName + '.xlsx')
+            book.save(fileName + '.xlsm')
+            book.close()
+            os.remove(fileName + '.xlsx')
+            book = app.books.open(fileName + '.xlsm')
+
+            for sheet in book.sheets:
+                #sheetCodeName = book.api.Sheets(1).CodeName
+                vbComponent = book.api.VBProject.VBComponents(sheet.api.CodeName)
+                vbComponent.CodeModule.InsertLines(1, vbaCode)
+            book.save()
+            book.close()
+        except Exception as e:
+            print(f"Error: {e}")
+            traceback.print_exc()
+        finally:
+            app.quit()
+
+    def close_excel_processes(self):
+        pass
+
+class TemplateXL:
+    def __init__(self,
+                 saveDir= r'E:/PharmOps-sample-data/summary table/',
+                 drugNames=[],
+                 standardsDict={"binding": {}, "function": {}}
+                ):
+        self.saveDir = saveDir
+        if self.saveDir[-1] != "/":
+            self.saveDir += "/"
+        self.drugNames = drugNames
+        self.standards = standardsDict
+        app = xw.App(visible=True)
+        app.display_alerts = False
+        wb = app.books.add()
+        savePath = r"E:/Test/macroTest.xlsm"
+        wb.save(savePath)
+        #self.bindingDA = xw.Book()
+        #self.binding5HT = xw.Book()
+        #self.functionDA = xw.Book()
+        #self.function5HT = xw.Book()
+        self.receptorsDA = ['D1', 'D2', 'D3', 'D4']
+        self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C']
+        sheet = wb.sheets[0]
+        sheet.range("A1").value = "Hello"
+    
+        vbaCode = """
+
+        """
+        for comp in wb.api.VBProject.VBComponents:
+            print(comp.name)
+        sheetName = wb.api.Sheets(1).CodeName
+        print("CodeName:", sheetName)
+        vbComponent = wb.api.VBProject.VBComponents(sheetName)
+        vbComponent.CodeModule.InsertLines(1, vbaCode)
+
+        wb.save()
+        wb.saved = True
+        wb.close()
+        app.quit()

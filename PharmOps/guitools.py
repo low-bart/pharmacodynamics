@@ -34,7 +34,7 @@ class BindingGUI:
                                                 command=self.generate_excel_templates)
         self.generateTemplateButton.pack()
         self.labelTriplicatesButton = tk.Button(self.frame,
-                                                text="Label triplicate date",
+                                                text="Label triplicate data",
                                                 command=self.parse_triplicates)
         self.labelTriplicatesButton.pack()
     # creates new window to verify user
@@ -219,9 +219,8 @@ class TriplicateGUI:
     def __init__(self, main, plate):
         self.main = main
         self.dataFrame = tk.Frame(self.main)
-        self.entryFrame = tk.Frame(self.main)
-        self.dataFrame.pack(fill="both", expand="yes")
-        self.entryFrame.pack(fill="both", expand="yes")
+        self.entryFrame = tk.Frame(self.main,
+                                   )
         self.columns = ["1", "2", "3"]
         self.tree = ttk.Treeview(self.dataFrame, columns=self.columns, show="headings")
         self.plate = plate
@@ -233,12 +232,15 @@ class TriplicateGUI:
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
         self.customTable = CustomTable(self.dataFrame, self.originalData, showData=False)
-        self.customTable.pack()
+        self.customTable.pack(expand=True, fill='both')
         print(self.dataDict)
         for col in self.columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=120, anchor = "center")
-        self.tree.pack()
+        self.tree.pack(expand=True, fill='both')
+        self.tree.pack_propagate(0)
+        self.triplicateEntry = tk.Entry(self.entryFrame)
+        self.triplicateEntry.pack()
         self.changeButton = tk.Button(self.entryFrame,
                                       text="cycle through dictionary",
                                       command=self.cycle_data)
@@ -246,6 +248,8 @@ class TriplicateGUI:
         self.currentKey = (0, 0)
         self.customTable.update_highlights([(0, 0), (0, 1), (0, 2)])
         self.tree.insert("", "end", values = self.dataDict[self.currentKey])
+        self.dataFrame.pack(fill="both", expand="yes")
+        self.entryFrame.pack(fill="both", expand="yes")
     
     def cycle_data(self):
         rowIdx = self.currentKey[0]
