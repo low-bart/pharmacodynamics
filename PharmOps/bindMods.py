@@ -401,7 +401,6 @@ class TemplateGenerator:
         self.receptorsDA = ['D1', 'D2', 'D3', 'D4'] 
         self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C'] 
         self.sheetTemplate = ['Assay Title', '', 'Receptor', '', 'Passage #:', '']
-        #self.titleCols = map(not, self.sheetTemplate)
         self.bindingTemplate = ['', 'Date', 
                         'IC50', 'Mean', 'SEM', 
                         '[radioligand]', 'Ki', 'Mean', 'SEM', 
@@ -425,9 +424,9 @@ class TemplateGenerator:
         self.standardCol = 'G'
         self.startingRow = 4
         self.make_binding_template("DA")
-        #self.make_binding_template("5HT")
-        #self.make_function_template("DA")
-        #self.make_function_template("5HT")
+        self.make_binding_template("5HT")
+        self.make_function_template("DA")
+        self.make_function_template("5HT")
 
 
     def add_binding_section(self, sheet, idx):
@@ -670,43 +669,3 @@ class TemplateGenerator:
 
     def close_excel_processes(self):
         pass
-
-class TemplateXL:
-    def __init__(self,
-                 saveDir= r'E:/PharmOps-sample-data/summary table/',
-                 drugNames=[],
-                 standardsDict={"binding": {}, "function": {}}
-                ):
-        self.saveDir = saveDir
-        if self.saveDir[-1] != "/":
-            self.saveDir += "/"
-        self.drugNames = drugNames
-        self.standards = standardsDict
-        app = xw.App(visible=True)
-        app.display_alerts = False
-        wb = app.books.add()
-        savePath = r"E:/Test/macroTest.xlsm"
-        wb.save(savePath)
-        #self.bindingDA = xw.Book()
-        #self.binding5HT = xw.Book()
-        #self.functionDA = xw.Book()
-        #self.function5HT = xw.Book()
-        self.receptorsDA = ['D1', 'D2', 'D3', 'D4']
-        self.receptors5HT = ['5HT1A', '5HT2A', '5HT2B', '5HT2C']
-        sheet = wb.sheets[0]
-        sheet.range("A1").value = "Hello"
-    
-        vbaCode = """
-
-        """
-        for comp in wb.api.VBProject.VBComponents:
-            print(comp.name)
-        sheetName = wb.api.Sheets(1).CodeName
-        print("CodeName:", sheetName)
-        vbComponent = wb.api.VBProject.VBComponents(sheetName)
-        vbComponent.CodeModule.InsertLines(1, vbaCode)
-
-        wb.save()
-        wb.saved = True
-        wb.close()
-        app.quit()
