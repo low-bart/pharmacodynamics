@@ -222,7 +222,7 @@ class TriplicateGUI:
         self.entryFrame = tk.Frame(self.main,
                                    )
         self.columns = ["1", "2", "3"]
-        self.tree = ttk.Treeview(self.dataFrame, columns=self.columns, show="headings")
+        self.tree = ttk.Treeview(self.dataFrame, columns=self.columns, show="headings", height=1)
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         self.dataDict = {}
@@ -231,27 +231,57 @@ class TriplicateGUI:
             numCols = 4
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
-        self.customTable = CustomTable(self.dataFrame, self.originalData, showData=False)
+        self.customTable = CustomTable(self.dataFrame, self.originalData, showData=False, onCellSelected=self.on_cell_click)
         self.customTable.pack(expand=True, fill='both')
-        print(self.dataDict)
         for col in self.columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=120, anchor = "center")
         self.tree.pack(expand=True, fill='both')
         self.tree.pack_propagate(0)
+        self.concentrationVal = tk.IntVar()
+        def sel():
+            selection = "You selected " + str(self.concentrationVal.get())
+            print(selection)
+        self.radio1 = tk.Radiobutton(self.entryFrame,
+                                     text="100 nM",
+                                     variable=self.concentrationVal,
+                                     value = -7,
+                                     command=sel)
+        self.radio2 = tk.Radiobutton(self.entryFrame,
+                                     text="10 μM",
+                                     variable=self.concentrationVal,
+                                     value = -5,
+                                     command=sel)
+        self.radio3 = tk.Radiobutton(self.entryFrame,
+                                     text="No drug",
+                                     variable=self.concentrationVal,
+                                     value = 0,
+                                     command=sel)
+        self.radio1.grid(row=0, column=0)
+        self.radio2.grid(row=0, column=1)
+        self.radio3.grid(row=0, column=2)
         self.triplicateEntry = tk.Entry(self.entryFrame)
-        self.triplicateEntry.pack()
+        self.triplicateEntry.grid(row=1, column=1)
         self.changeButton = tk.Button(self.entryFrame,
                                       text="cycle through dictionary",
                                       command=self.cycle_data)
-        self.changeButton.pack()
+        self.changeButton.grid(row=2, column=1)
         self.currentKey = (0, 0)
-        self.customTable.update_highlights([(0, 0), (0, 1), (0, 2)])
+        self.customTable.update_triplet(self.currentKey)
         self.tree.insert("", "end", values = self.dataDict[self.currentKey])
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
-    
+        self.concentrationVal.set(None)
+
     def cycle_data(self):
+        try:
+            self.concentrationVal.get()
+        except:
+            print("Select a concentration")
+            return
+        if self.triplicateEntry.get() == "":
+            print("Enter a drug name")
+            return
         rowIdx = self.currentKey[0]
         tripIdx = self.currentKey[1]
         if rowIdx >= 7 and tripIdx >= 3:
@@ -261,13 +291,17 @@ class TriplicateGUI:
             rowIdx += 1
         else:
             tripIdx += 1
+        self.update_current_triplicate(rowIdx, tripIdx)
+
+    def on_cell_click(self, row, tripIdx):
+        self.update_current_triplicate(row, tripIdx)
+    
+    def update_current_triplicate(self, rowIdx, tripIdx):
         self.currentKey = (rowIdx, tripIdx)
-            
+        self.triplicateEntry.delete(0, tk.END)
+        self.concentrationVal.set(None)
         testData = self.dataDict[self.currentKey]
-        tupleList = []
-        for i in range(0, 3):
-            tupleList.append(tuple(map(sum, zip(self.currentKey, (0, self.currentKey[1] * 3 + i - self.currentKey[1])))))
-        self.customTable.update_highlights(tupleList)
+        self.customTable.update_triplet(self.currentKey)
         for row in self.tree.get_children():
             self.tree.delete(row)
         
@@ -441,22 +475,25 @@ class DrugReportsGUI:
 
 # Allows for custom behavior in tabular data like cell selection and highlighting
 class CustomTable(tk.Frame):
-    def __init__(self, parent, data, showData = True):
+    def __init__(self, parent, data, showData = True, onCellSelected=None):
+        
         super().__init__(parent)
-
-        self.data = data
-        self.selectedCells = set()
-
-        self.canvas = tk.Canvas(self, bg="white", bd=0, highlightthickness=0)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.on_cell_selected = onCellSelected
         self.showData = showData
         if self.showData:
             self.cellWidth = 60
             self.cellHeight = 30
-            self.canvas.bind("<Button-1>", self.handle_click)
         else:
             self.cellWidth = 30
             self.cellHeight = 15
+        self.canvas = tk.Canvas(self, bg="white", bd=0, highlightthickness=0, height=self.cellHeight*8)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        self.canvas.bind("<Button-1>", self.handle_click)
+
+        self.data = data
+        self.selectedCells = set()
+
 
         self.draw_table()
     
@@ -477,19 +514,30 @@ class CustomTable(tk.Frame):
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=3)
 
     def handle_click(self, event):
-        col = event.x // self.cellWidth
         row = event.y // self.cellHeight
+        print(row)
+        if self.showData:
+            col = event.x // self.cellWidth
 
-        if (row, col) in self.data:
-            if (row, col) in self.selectedCells:
-                self.selectedCells.remove((row, col))
-            else:
-                self.selectedCells.add((row, col))
-            self.draw_table()
-    
-    def update_highlights(self, indices):
+            if (row, col) in self.data:
+                if (row, col) in self.selectedCells:
+                    self.selectedCells.remove((row, col))
+                else:
+                    self.selectedCells.add((row, col))
+                self.draw_table()
+        else:
+            col = event.x // self.cellWidth
+            triplicate = np.floor_divide(col, 3)
+            self.update_triplet((row, triplicate))
+            if self.on_cell_selected:
+                self.on_cell_selected(row, triplicate)
+
+    def update_triplet(self, tripIdx):
+        tupleList = []
+        for i in range(0, 3):
+            tupleList.append(tuple(map(sum, zip(tripIdx, (0, tripIdx[1] * 3 + i - tripIdx[1])))))
         self.selectedCells = set()
-        for tup in indices:
+        for tup in tupleList:
             self.selectedCells.add(tup)
         self.draw_table()
 
