@@ -307,7 +307,6 @@ class TriplicateGUI:
         
         self.tree.insert("", "end", values=testData)
 
-        
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
     def __init__(self, main, plate):
@@ -474,6 +473,34 @@ class DrugReportsGUI:
             ))
 
 # Allows for custom behavior in tabular data like cell selection and highlighting
+'''
+This should be refactored to allow for more seamless types of cell highlighting depending on the application. some use cases:
+> add or remove a single cell for the WellData gui to allow for omission of data from multiple, non-contiguous cells
+> select a single triplet in the TriplicateGUI to enter drug name and concentration
+> select multiple rows in the TriplicateGUI to assign them a single receptor
+
+A possible solution involves a separate method for each highlighting and removing a highlight from a single cell. 
+The user click will fall within a cell, and the specific type of highlighting action will utilize the single-cell highlighter
+as needed to determine based on caller which behavior should occur:
+    > cell that is highlighted should be unhighlighted
+    > cell that is unhighlighted should be highlighted
+    > row that is highlighted should be unhighlighted
+    > row that is unhighlighted should be highlighted
+    > cell falls within the highlighted triplet: do nothing
+    > cell falls within a different triplet: unhighlight the current triplet and highlight the new one
+
+These behaviors should be mutually exclusive, with the toggle type specific to either:
+    > single-cell highlighting
+    > multi-cell highlighting (non-contiguous)
+    > single triplet highlighting
+    > multi triplet highlighting
+    > single row highlighting
+    > multi row highlighting
+
+The methods underlying the single vs multi highlighting should be shared within the group,
+with the exception that single allows for only one selection and behaves like a radio-button,
+and multi behaves more like multiple checkbox selection.
+'''
 class CustomTable(tk.Frame):
     def __init__(self, parent, data, showData = True, onCellSelected=None):
         
@@ -496,7 +523,8 @@ class CustomTable(tk.Frame):
 
 
         self.draw_table()
-    
+
+
     def draw_table(self):
         self.canvas.delete("all")
 
@@ -515,10 +543,8 @@ class CustomTable(tk.Frame):
 
     def handle_click(self, event):
         row = event.y // self.cellHeight
-        print(row)
+        col = event.x // self.cellWidth
         if self.showData:
-            col = event.x // self.cellWidth
-
             if (row, col) in self.data:
                 if (row, col) in self.selectedCells:
                     self.selectedCells.remove((row, col))
@@ -526,11 +552,42 @@ class CustomTable(tk.Frame):
                     self.selectedCells.add((row, col))
                 self.draw_table()
         else:
-            col = event.x // self.cellWidth
             triplicate = np.floor_divide(col, 3)
             self.update_triplet((row, triplicate))
             if self.on_cell_selected:
                 self.on_cell_selected(row, triplicate)
+        return row, col
+
+    def select_cell(self, event):
+        row, col = self.handle_click(event)
+        if (row, col) in self.selectedCells:
+            self.deselect_cell(row, col)
+        else:
+            self.selectedCells.add((row, col))
+        self.draw_table()
+
+    def deselect_cell(self, row, col):
+        if (row, col) in self.selectedCells:
+            self.selectedCells.remove((row, col))
+        self.draw_table()
+
+    def select_triplet(self, event):
+        row, col = self.handle_click(event)
+        triplicate = np.floor_divide(col, 3)
+        
+        pass
+
+    def deselect_triplet(self, event):
+        pass
+
+    def select_row(self, event):
+        pass
+
+    def deselect_row(self, event):
+        pass
+
+    def toggle_multi(self, event):
+        pass
 
     def update_triplet(self, tripIdx):
         tupleList = []
@@ -539,6 +596,15 @@ class CustomTable(tk.Frame):
         self.selectedCells = set()
         for tup in tupleList:
             self.selectedCells.add(tup)
+        self.draw_table()
+
+    def update_row(self, row):
+        tupleList = []
+        for i in range(0, 12):
+            if (row, i) in self.selectedCells:
+                self.selectedCells.remove((row, i))
+            else:
+                self.selectedCells.add((row, i))
         self.draw_table()
 
 # used to create excel templates for nida/dea assays
