@@ -520,10 +520,11 @@ class CustomTable(tk.Frame):
 
         self.data = data
         self.selectedCells = set()
-
+        self.selectedTriplets = set()
+        self.selectedRows = set()
+        self.multiSelect = True
 
         self.draw_table()
-
 
     def draw_table(self):
         self.canvas.delete("all")
@@ -552,18 +553,29 @@ class CustomTable(tk.Frame):
                     self.selectedCells.add((row, col))
                 self.draw_table()
         else:
-            triplicate = np.floor_divide(col, 3)
+            triplicate = col // 3
             self.update_triplet((row, triplicate))
             if self.on_cell_selected:
                 self.on_cell_selected(row, triplicate)
+            # self.select_row(event) here for debugging
+            # refactor should include a switch for what highlighting is allowed
+
+        return row, col
+    
+    def cell_coordinates(self, event):
+        row = event.y // self.cellHeight
+        col = event.x // self.cellWidth
         return row, col
 
     def select_cell(self, event):
-        row, col = self.handle_click(event)
+        row, col = self.cell_coordinates(event)
+        if (row, col) not in self.data:
+            return
         if (row, col) in self.selectedCells:
             self.deselect_cell(row, col)
-        else:
-            self.selectedCells.add((row, col))
+            return
+        self.check_reset()
+        self.selectedCells.add((row, col))
         self.draw_table()
 
     def deselect_cell(self, row, col):
@@ -572,28 +584,59 @@ class CustomTable(tk.Frame):
         self.draw_table()
 
     def select_triplet(self, event):
-        row, col = self.handle_click(event)
-        triplicate = np.floor_divide(col, 3)
-        
-        pass
+        row, col = self.cell_coordinates(event)
+        triplet = col // 3
+        if (row, triplet) in self.selectedTriplets:
+            self.deselect_triplet(row, triplet)
+            return
+        self.check_reset()
+        for col in range(triplet, triplet + 3):
+            self.selectedCells.add((row, col))
+        self.selectedTriplets.add((row, triplet))
+        self.draw_table()
 
-    def deselect_triplet(self, event):
-        pass
+    def deselect_triplet(self, row, triplet):
+        for col in range(triplet, triplet + 3):
+            if (row, col) in self.selectedCells:
+                self.selectedCells.remove((row, col))
+        self.selectedTriplets.remove((row, triplet))
+        self.draw_table()
 
     def select_row(self, event):
-        pass
-
-    def deselect_row(self, event):
-        pass
+        row, col = self.cell_coordinates(event)
+        if row in self.selectedRows:
+            self.deselect_row(row)
+            return
+        self.check_reset()
+        for col in range(0, 12):
+            self.selectedCells.add((row, col))
+        self.selectedRows.add((row))
+        self.draw_table()
+        
+    def deselect_row(self, row):
+        for col in range(0, 12):
+            if (row, col) in self.selectedCells:
+                self.selectedCells.remove((row, col))
+        self.selectedRows.remove((row))
+        self.draw_table()
 
     def toggle_multi(self, event):
-        pass
+        self.multiSelect = not self.multiSelect
+
+    def check_reset(self):
+        if self.multiSelect is False:
+            self.reset_selections()
+
+    def reset_selections(self):
+        self.selectedCells = set()
+        self.selectedTriplets = set()
+        self.selectedRows = set()
 
     def update_triplet(self, tripIdx):
         tupleList = []
         for i in range(0, 3):
             tupleList.append(tuple(map(sum, zip(tripIdx, (0, tripIdx[1] * 3 + i - tripIdx[1])))))
-        self.selectedCells = set()
+        self.check_reset()
         for tup in tupleList:
             self.selectedCells.add(tup)
         self.draw_table()
