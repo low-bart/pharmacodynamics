@@ -217,12 +217,13 @@ class BindingGUI:
 # allows for manual entry of triplicate data and concentrations
 class TriplicateGUI:
     def __init__(self, main, plate):
+        self.selectedRows = set()
+        self.assignedRows = set()
         self.main = main
         self.dataFrame = tk.Frame(self.main)
         self.entryFrame = tk.Frame(self.main,
                                    )
         self.columns = ["1", "2", "3"]
-        self.tree = ttk.Treeview(self.dataFrame, columns=self.columns, show="headings", height=1)
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         self.dataDict = {}
@@ -231,7 +232,26 @@ class TriplicateGUI:
             numCols = 4
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
-        self.customTable = CustomTable(self.dataFrame, self.originalData, showData=False, onCellSelected=self.on_cell_click)
+        self.receptorSelection = CustomTable(self.dataFrame, self.originalData, showData=False, onCellSelected=self.update_selected_row, selectionType="row", selectMulti=True)
+        self.receptorSelection.pack(expand=True, fill='both')
+        self.receptorEntry = tk.Entry(self.entryFrame)
+        self.receptorEntry.grid(row=0, column=0)
+        self.receptorAddButton = tk.Button(self.entryFrame,
+                                           text="Assign receptor",
+                                           command = lambda: self.update_receptors(self.receptorEntry.get()))
+        self.receptorAddButton.grid(row=1, column=0)
+        self.receptorsAssigned = False
+        self.dataFrame.pack(fill="both", expand="yes")
+        self.entryFrame.pack(fill="both", expand="yes")
+
+        
+
+    def assign_receptors(self):
+        self.receptorSelection.pack_forget()
+        self.receptorEntry.grid_forget()
+        self.receptorAddButton.grid_forget()
+        self.tree = ttk.Treeview(self.dataFrame, columns=self.columns, show="headings", height=1)
+        self.customTable = CustomTable(self.dataFrame, self.originalData, showData=False, onCellSelected=self.update_current_triplicate, selectionType="triplet", selectMulti=False)
         self.customTable.pack(expand=True, fill='both')
         for col in self.columns:
             self.tree.heading(col, text=col)
@@ -263,23 +283,22 @@ class TriplicateGUI:
         self.triplicateEntry = tk.Entry(self.entryFrame)
         self.triplicateEntry.grid(row=1, column=1)
         self.changeButton = tk.Button(self.entryFrame,
-                                      text="cycle through dictionary",
+                                      text="Save entries",
                                       command=self.cycle_data)
         self.changeButton.grid(row=2, column=1)
         self.currentKey = (0, 0)
         self.customTable.update_triplet(self.currentKey)
         self.tree.insert("", "end", values = self.dataDict[self.currentKey])
-        self.dataFrame.pack(fill="both", expand="yes")
-        self.entryFrame.pack(fill="both", expand="yes")
         self.concentrationVal.set(None)
 
     def cycle_data(self):
         try:
-            self.concentrationVal.get()
+            tripConc = self.concentrationVal.get()
         except:
             print("Select a concentration")
             return
-        if self.triplicateEntry.get() == "":
+        drugName = self.triplicateEntry.get()
+        if drugName == "":
             print("Enter a drug name")
             return
         rowIdx = self.currentKey[0]
@@ -292,9 +311,6 @@ class TriplicateGUI:
         else:
             tripIdx += 1
         self.update_current_triplicate(rowIdx, tripIdx)
-
-    def on_cell_click(self, row, tripIdx):
-        self.update_current_triplicate(row, tripIdx)
     
     def update_current_triplicate(self, rowIdx, tripIdx):
         self.currentKey = (rowIdx, tripIdx)
@@ -304,9 +320,25 @@ class TriplicateGUI:
         self.customTable.update_triplet(self.currentKey)
         for row in self.tree.get_children():
             self.tree.delete(row)
-        
         self.tree.insert("", "end", values=testData)
 
+    def update_selected_row(self, rowIdx):
+        if rowIdx in self.selectedRows:
+            self.selectedRows.remove((rowIdx))
+        else:
+            self.selectedRows.add((rowIdx))
+
+    def update_receptors(self, receptorName):
+        if receptorName == "":
+            return
+        self.receptorSelection.assign_rows()
+        print(self.selectedRows)
+        for i in self.selectedRows:
+            self.assignedRows.add(i)
+        self.selectedRows = set()
+        print(self.assignedRows)
+        if len(self.assignedRows) == 8:
+            self.assign_receptors()
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
     def __init__(self, main, plate):
@@ -502,10 +534,11 @@ with the exception that single allows for only one selection and behaves like a 
 and multi behaves more like multiple checkbox selection.
 '''
 class CustomTable(tk.Frame):
-    def __init__(self, parent, data, showData = True, onCellSelected=None):
+    def __init__(self, parent, data, showData=True, onCellSelected=None, selectionType="cell", selectMulti=True):
         
         super().__init__(parent)
         self.on_cell_selected = onCellSelected
+        self.highlightType = selectionType
         self.showData = showData
         if self.showData:
             self.cellWidth = 60
@@ -515,15 +548,13 @@ class CustomTable(tk.Frame):
             self.cellHeight = 15
         self.canvas = tk.Canvas(self, bg="white", bd=0, highlightthickness=0, height=self.cellHeight*8)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-
         self.canvas.bind("<Button-1>", self.handle_click)
-
         self.data = data
         self.selectedCells = set()
         self.selectedTriplets = set()
         self.selectedRows = set()
-        self.multiSelect = True
-
+        self.assignedRows = set()
+        self.multiSelect = selectMulti
         self.draw_table()
 
     def draw_table(self):
@@ -541,10 +572,33 @@ class CustomTable(tk.Frame):
             
             if (row, col) in self.selectedCells:
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=3)
+            
+            if (row) in self.assignedRows:
+                self.canvas.create_rectangle(x1, y1, x2, y2, outline="green", width=3)
 
     def handle_click(self, event):
         row = event.y // self.cellHeight
         col = event.x // self.cellWidth
+        match self.highlightType:
+            case "cell":
+                if (row, col) in self.selectedCells:
+                    self.selectedCells.remove((row, col))
+                else:
+                    self.selectedCells.add((row, col))
+                if self.on_cell_selected:
+                    self.on_cell_selected(row, col)
+            case "triplet":
+                triplicate = col // 3
+                self.update_triplet((row, triplicate))
+                if self.on_cell_selected:
+                    self.on_cell_selected(row, triplicate)    
+            case "row":
+                self.select_row(event) # here for debugging
+                if self.on_cell_selected:
+                    self.on_cell_selected(row)
+        
+        self.draw_table()
+        '''      
         if self.showData:
             if (row, col) in self.data:
                 if (row, col) in self.selectedCells:
@@ -557,10 +611,9 @@ class CustomTable(tk.Frame):
             self.update_triplet((row, triplicate))
             if self.on_cell_selected:
                 self.on_cell_selected(row, triplicate)
-            # self.select_row(event) here for debugging
+            self.select_row(event) # here for debugging
             # refactor should include a switch for what highlighting is allowed
-
-        return row, col
+        '''
     
     def cell_coordinates(self, event):
         row = event.y // self.cellHeight
@@ -604,6 +657,8 @@ class CustomTable(tk.Frame):
 
     def select_row(self, event):
         row, col = self.cell_coordinates(event)
+        if row in self.assignedRows:
+            return
         if row in self.selectedRows:
             self.deselect_row(row)
             return
@@ -624,7 +679,7 @@ class CustomTable(tk.Frame):
         self.multiSelect = not self.multiSelect
 
     def check_reset(self):
-        if self.multiSelect is False:
+        if not self.multiSelect:
             self.reset_selections()
 
     def reset_selections(self):
@@ -648,6 +703,12 @@ class CustomTable(tk.Frame):
                 self.selectedCells.remove((row, i))
             else:
                 self.selectedCells.add((row, i))
+        self.draw_table()
+
+    def assign_rows(self):
+        for row in self.selectedRows:
+            self.assignedRows.add(row)
+        self.selectedRows = set()
         self.draw_table()
 
 # used to create excel templates for nida/dea assays
