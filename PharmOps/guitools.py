@@ -219,11 +219,13 @@ class TriplicateGUI:
     def __init__(self, main, plate):
         self.selectedRows = set()
         self.assignedRows = set()
+        self.receptorByRow = 8*[None]
         self.main = main
         self.dataFrame = tk.Frame(self.main)
         self.entryFrame = tk.Frame(self.main,
                                    )
         self.columns = ["1", "2", "3"]
+        self.receptorList = {}
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         self.dataDict = {}
@@ -232,8 +234,18 @@ class TriplicateGUI:
             numCols = 4
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
-        self.receptorSelection = CustomTable(self.dataFrame, self.originalData, showData=False, onCellSelected=self.update_selected_row, selectionType="row", selectMulti=True)
+        self.receptorSelection = CustomTable(self.dataFrame, 
+                                             self.originalData, 
+                                             showData=False, 
+                                             onCellSelected=self.update_selected_row, 
+                                             selectionType="row", 
+                                             selectMulti=True)
         self.receptorSelection.pack(expand=True, fill='both')
+        self.receptorInfo = ttk.Treeview(self.dataFrame,
+                                         columns=("labels"))
+        self.receptorInfo.heading("#0", text="Receptor Name")
+        self.receptorInfo.heading("labels", text="Row Labels")
+        self.receptorInfo.pack(expand=True, fill='both')
         self.receptorEntry = tk.Entry(self.entryFrame)
         self.receptorEntry.grid(row=0, column=0)
         self.receptorAddButton = tk.Button(self.entryFrame,
@@ -243,15 +255,38 @@ class TriplicateGUI:
         self.receptorsAssigned = False
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
-
-        
+      
+    def update_receptors(self, receptorName):
+        if receptorName == "" or self.selectedRows == set():
+            return
+        self.receptorSelection.assign_rows()
+        self.receptorEntry.delete(0, tk.END)
+        for i in self.selectedRows:
+            self.assignedRows.add(i)
+            self.receptorByRow[i] = receptorName
+        self.receptorInfo.insert("", 
+                                tk.END, 
+                                text=receptorName,
+                                values=(str(self.selectedRows)))
+        self.selectedRows = set()
+        print(self.assignedRows)
+        if len(self.assignedRows) == 8:
+            self.assign_receptors()
 
     def assign_receptors(self):
         self.receptorSelection.pack_forget()
         self.receptorEntry.grid_forget()
         self.receptorAddButton.grid_forget()
-        self.tree = ttk.Treeview(self.dataFrame, columns=self.columns, show="headings", height=1)
-        self.customTable = CustomTable(self.dataFrame, self.originalData, showData=False, onCellSelected=self.update_current_triplicate, selectionType="triplet", selectMulti=False)
+        self.tree = ttk.Treeview(self.dataFrame, 
+                                 columns=self.columns, 
+                                 show="headings", 
+                                 height=1)
+        self.customTable = CustomTable(self.dataFrame, 
+                                       self.originalData, 
+                                       showData=False, 
+                                       onCellSelected=self.update_current_triplicate, 
+                                       selectionType="triplet", 
+                                       selectMulti=False)
         self.customTable.pack(expand=True, fill='both')
         for col in self.columns:
             self.tree.heading(col, text=col)
@@ -290,6 +325,7 @@ class TriplicateGUI:
         self.customTable.update_triplet(self.currentKey)
         self.tree.insert("", "end", values = self.dataDict[self.currentKey])
         self.concentrationVal.set(None)
+        print(self.receptorByRow)
 
     def cycle_data(self):
         try:
@@ -328,17 +364,6 @@ class TriplicateGUI:
         else:
             self.selectedRows.add((rowIdx))
 
-    def update_receptors(self, receptorName):
-        if receptorName == "":
-            return
-        self.receptorSelection.assign_rows()
-        print(self.selectedRows)
-        for i in self.selectedRows:
-            self.assignedRows.add(i)
-        self.selectedRows = set()
-        print(self.assignedRows)
-        if len(self.assignedRows) == 8:
-            self.assign_receptors()
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
     def __init__(self, main, plate):
@@ -505,34 +530,7 @@ class DrugReportsGUI:
             ))
 
 # Allows for custom behavior in tabular data like cell selection and highlighting
-'''
-This should be refactored to allow for more seamless types of cell highlighting depending on the application. some use cases:
-> add or remove a single cell for the WellData gui to allow for omission of data from multiple, non-contiguous cells
-> select a single triplet in the TriplicateGUI to enter drug name and concentration
-> select multiple rows in the TriplicateGUI to assign them a single receptor
 
-A possible solution involves a separate method for each highlighting and removing a highlight from a single cell. 
-The user click will fall within a cell, and the specific type of highlighting action will utilize the single-cell highlighter
-as needed to determine based on caller which behavior should occur:
-    > cell that is highlighted should be unhighlighted
-    > cell that is unhighlighted should be highlighted
-    > row that is highlighted should be unhighlighted
-    > row that is unhighlighted should be highlighted
-    > cell falls within the highlighted triplet: do nothing
-    > cell falls within a different triplet: unhighlight the current triplet and highlight the new one
-
-These behaviors should be mutually exclusive, with the toggle type specific to either:
-    > single-cell highlighting
-    > multi-cell highlighting (non-contiguous)
-    > single triplet highlighting
-    > multi triplet highlighting
-    > single row highlighting
-    > multi row highlighting
-
-The methods underlying the single vs multi highlighting should be shared within the group,
-with the exception that single allows for only one selection and behaves like a radio-button,
-and multi behaves more like multiple checkbox selection.
-'''
 class CustomTable(tk.Frame):
     def __init__(self, parent, data, showData=True, onCellSelected=None, selectionType="cell", selectMulti=True):
         
@@ -577,8 +575,7 @@ class CustomTable(tk.Frame):
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline="green", width=3)
 
     def handle_click(self, event):
-        row = event.y // self.cellHeight
-        col = event.x // self.cellWidth
+        row, col = self.cell_coordinates(event)
         match self.highlightType:
             case "cell":
                 if (row, col) in self.selectedCells:
@@ -588,32 +585,15 @@ class CustomTable(tk.Frame):
                 if self.on_cell_selected:
                     self.on_cell_selected(row, col)
             case "triplet":
-                triplicate = col // 3
-                self.update_triplet((row, triplicate))
+                tripIdx = col // 3
+                self.update_triplet((row, tripIdx))
                 if self.on_cell_selected:
-                    self.on_cell_selected(row, triplicate)    
+                    self.on_cell_selected(row, tripIdx)    
             case "row":
                 self.select_row(event) # here for debugging
                 if self.on_cell_selected:
                     self.on_cell_selected(row)
-        
         self.draw_table()
-        '''      
-        if self.showData:
-            if (row, col) in self.data:
-                if (row, col) in self.selectedCells:
-                    self.selectedCells.remove((row, col))
-                else:
-                    self.selectedCells.add((row, col))
-                self.draw_table()
-        else:
-            triplicate = col // 3
-            self.update_triplet((row, triplicate))
-            if self.on_cell_selected:
-                self.on_cell_selected(row, triplicate)
-            self.select_row(event) # here for debugging
-            # refactor should include a switch for what highlighting is allowed
-        '''
     
     def cell_coordinates(self, event):
         row = event.y // self.cellHeight
