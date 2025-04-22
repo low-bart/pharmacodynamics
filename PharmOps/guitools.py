@@ -242,41 +242,72 @@ class TriplicateGUI:
                                              selectMulti=True)
         self.receptorSelection.pack(expand=True, fill='both')
         self.receptorInfo = ttk.Treeview(self.dataFrame,
-                                         columns=("labels"))
+                                         columns=("labels"),
+                                         height=1)
         self.receptorInfo.heading("#0", text="Receptor Name")
         self.receptorInfo.heading("labels", text="Row Labels")
-        self.receptorInfo.pack(expand=True, fill='both')
+        self.receptorInfo.pack()
         self.receptorEntry = tk.Entry(self.entryFrame)
         self.receptorEntry.grid(row=0, column=0)
         self.receptorAddButton = tk.Button(self.entryFrame,
                                            text="Assign receptor",
                                            command = lambda: self.update_receptors(self.receptorEntry.get()))
         self.receptorAddButton.grid(row=1, column=0)
+        self.receptorRemoveButton = tk.Button(self.entryFrame, 
+                                              text="Remove receptor", 
+                                              command = self.remove_receptor)
+        self.receptorRemoveButton.grid(row=1, column=1)
+        self.receptorsConfirmButton = tk.Button(self.entryFrame,
+                                                text="Confirm layout",
+                                                command=self.assign_receptors,
+                                                state='disabled')
+        self.receptorsConfirmButton.grid(row=1, column=2)
         self.receptorsAssigned = False
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
       
+    def update_treeview(self):
+        rowCount = len(self.receptorInfo.get_children()) + 1
+        self.receptorInfo.config(height=rowCount)
+        
     def update_receptors(self, receptorName):
         if receptorName == "" or self.selectedRows == set():
             return
         self.receptorSelection.assign_rows()
         self.receptorEntry.delete(0, tk.END)
+        rowLetters = [chr(ord('A') + row) for row in self.selectedRows]
+        rowString = ', '.join(rowLetters)
         for i in self.selectedRows:
             self.assignedRows.add(i)
             self.receptorByRow[i] = receptorName
+        self.update_treeview()
         self.receptorInfo.insert("", 
                                 tk.END, 
                                 text=receptorName,
-                                values=(str(self.selectedRows)))
+                                values=[rowString])
         self.selectedRows = set()
+        self.ui_state()
+
+    def ui_state(self):
         print(self.assignedRows)
         if len(self.assignedRows) == 8:
-            self.assign_receptors()
+            self.receptorsConfirmButton["state"] = "normal"
+            self.receptorAddButton["state"] = "disabled"
+            self.receptorEntry["state"] = "disabled"
+        else:
+            self.receptorsConfirmButton["state"] = "disabled"
+            self.receptorAddButton["state"] = "normal"
+            self.receptorEntry["state"] = "normal"
 
-    def assign_receptors(self):
+    def unload_receptor_gui(self):
         self.receptorSelection.pack_forget()
         self.receptorEntry.grid_forget()
         self.receptorAddButton.grid_forget()
+        self.receptorRemoveButton.grid_forget()
+        self.receptorsConfirmButton.grid_forget()
+
+    def assign_receptors(self):
+        self.unload_receptor_gui()
         self.tree = ttk.Treeview(self.dataFrame, 
                                  columns=self.columns, 
                                  show="headings", 
@@ -359,10 +390,28 @@ class TriplicateGUI:
         self.tree.insert("", "end", values=testData)
 
     def update_selected_row(self, rowIdx):
+        if rowIdx in self.assignedRows:
+            return
         if rowIdx in self.selectedRows:
             self.selectedRows.remove((rowIdx))
         else:
             self.selectedRows.add((rowIdx))
+    
+    def remove_receptor(self):
+        curItem = self.receptorInfo.focus()
+        itemContents = self.receptorInfo.item(curItem)
+        itemRows = itemContents["values"][0]
+        rowList = itemRows.split(', ')
+        for row in rowList:
+            rowIdx = ord(row) - ord('A')
+            print(rowIdx)
+            print(self.assignedRows)
+            self.assignedRows.remove(rowIdx)
+            self.receptorSelection.unassign_rows([rowIdx])
+        self.receptorInfo.delete(curItem)
+        self.update_treeview()
+        self.ui_state()
+
 
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
@@ -636,7 +685,10 @@ class CustomTable(tk.Frame):
         self.draw_table()
 
     def select_row(self, event):
-        row, col = self.cell_coordinates(event)
+        if type(event) == int:
+            row = event
+        else:
+            row, col = self.cell_coordinates(event)
         if row in self.assignedRows:
             return
         if row in self.selectedRows:
@@ -689,6 +741,13 @@ class CustomTable(tk.Frame):
         for row in self.selectedRows:
             self.assignedRows.add(row)
         self.selectedRows = set()
+        self.selectedCells = set()
+        self.draw_table()
+    
+    def unassign_rows(self, rows):
+        for row in rows:
+            self.select_row(row)
+            self.assignedRows.remove(row)
         self.draw_table()
 
 # used to create excel templates for nida/dea assays
