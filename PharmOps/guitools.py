@@ -12,31 +12,32 @@ class BindingGUI:
     def __init__(self, main):
         self.main = main
         self.frame = tk.Frame(self.main)
+        self.frame.pack()
         self.newWellDataButton = tk.Button(self.frame, 
                                             text="Load new WellData", 
                                             command=self.import_WellData)
-        self.newWellDataButton.pack()
-        self.frame.pack()
         self.loadWellDataButton = tk.Button(self.frame,
                                             text="Load saved WellData",
                                             command=self.load_WellData)
-        self.loadWellDataButton.pack()
         self.loadDrugReportsButton = tk.Button(self.frame, 
                                                text="Load saved DrugReports", 
                                                command=self.load_DrugReports)
-        self.loadDrugReportsButton.pack()
         self.generateSummaryTableButton = tk.Button(self.frame,
                                                     text="Generate summary tables",
                                                     command=self.generate_summary_tables)
-        self.generateSummaryTableButton.pack()
         self.generateTemplateButton = tk.Button(self.frame,
                                                 text="Create excel templates",
                                                 command=self.generate_excel_templates)
-        self.generateTemplateButton.pack()
         self.labelTriplicatesButton = tk.Button(self.frame,
                                                 text="Label triplicate data",
                                                 command=self.parse_triplicates)
+        self.newWellDataButton.pack()
+        self.loadWellDataButton.pack()
+        self.loadDrugReportsButton.pack()
+        self.generateSummaryTableButton.pack()
+        self.generateTemplateButton.pack()
         self.labelTriplicatesButton.pack()
+        
     # creates new window to verify user
     def get_user_info(self):
         userInfo = tk.Toplevel(self.main)
@@ -229,11 +230,15 @@ class TriplicateGUI:
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         self.dataDict = {}
+        self.drugDict = {}
+        self.concDict = {}
         self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
         for rowIdx, row in plateData.iterrows():
             numCols = 4
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
+                self.drugDict[rowIdx, triplicate] = ""
+                self.concDict[rowIdx, triplicate] = ""
         self.receptorSelection = CustomTable(self.dataFrame, 
                                              self.originalData, 
                                              showData=False, 
@@ -253,15 +258,15 @@ class TriplicateGUI:
                                            text="Assign receptor",
                                            command = lambda: self.update_receptors(self.receptorEntry.get()))
         self.receptorAddButton.grid(row=1, column=0)
-        self.receptorRemoveButton = tk.Button(self.entryFrame, 
-                                              text="Remove receptor", 
-                                              command = self.remove_receptor)
-        self.receptorRemoveButton.grid(row=1, column=1)
         self.receptorsConfirmButton = tk.Button(self.entryFrame,
                                                 text="Confirm layout",
                                                 command=self.assign_receptors,
                                                 state='disabled')
-        self.receptorsConfirmButton.grid(row=1, column=2)
+        self.receptorsConfirmButton.grid(row=1, column=1)
+        self.receptorRemoveButton = tk.Button(self.entryFrame, 
+                                              text="Remove receptor", 
+                                              command = self.remove_receptor)
+        self.receptorRemoveButton.grid(row=1, column=2)
         self.receptorsAssigned = False
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
@@ -315,7 +320,7 @@ class TriplicateGUI:
         self.customTable = CustomTable(self.dataFrame, 
                                        self.originalData, 
                                        showData=False, 
-                                       onCellSelected=self.update_current_triplicate, 
+                                       onCellSelected=self.select_triplicate, 
                                        selectionType="triplet", 
                                        selectMulti=False)
         self.customTable.pack(expand=True, fill='both')
@@ -359,35 +364,49 @@ class TriplicateGUI:
         print(self.receptorByRow)
 
     def cycle_data(self):
-        try:
-            tripConc = self.concentrationVal.get()
-        except:
-            print("Select a concentration")
-            return
-        drugName = self.triplicateEntry.get()
-        if drugName == "":
-            print("Enter a drug name")
-            return
         rowIdx = self.currentKey[0]
         tripIdx = self.currentKey[1]
-        if rowIdx >= 7 and tripIdx >= 3:
+        if not self.update_current_triplicate(rowIdx, tripIdx):
+            print("nah")
             return
+        print(self.drugDict)
+        print(self.concDict)
         if tripIdx >= 3:
             tripIdx = 0
             rowIdx += 1
         else:
             tripIdx += 1
-        self.update_current_triplicate(rowIdx, tripIdx)
-    
-    def update_current_triplicate(self, rowIdx, tripIdx):
+        if rowIdx > 7:
+            rowIdx = 0
         self.currentKey = (rowIdx, tripIdx)
+        self.customTable.update_triplet(self.currentKey)
+
+    def select_triplicate(self, rowIdx, tripIdx):
+        self.currentKey = (rowIdx, tripIdx)
+        tripData = self.dataDict[self.currentKey]
         self.triplicateEntry.delete(0, tk.END)
         self.concentrationVal.set(None)
-        testData = self.dataDict[self.currentKey]
-        self.customTable.update_triplet(self.currentKey)
         for row in self.tree.get_children():
             self.tree.delete(row)
-        self.tree.insert("", "end", values=testData)
+        self.tree.insert("", "end", values=tripData)
+
+    def update_current_triplicate(self, rowIdx, tripIdx):
+        drugName = self.triplicateEntry.get()
+        if drugName == "":
+            print("Enter a drug name")
+            return 0
+        try:
+            concVal = self.concentrationVal.get()
+        except:
+            print("Select a concentration")
+            return 0
+        try:
+            concVal = self.concentrationVal.get()
+        except:
+            concVal = None
+        self.drugDict[self.currentKey] = drugName
+        self.concDict[self.currentKey] = concVal
+        return 1
 
     def update_selected_row(self, rowIdx):
         if rowIdx in self.assignedRows:
