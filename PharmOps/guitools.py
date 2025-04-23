@@ -238,8 +238,6 @@ class TriplicateGUI:
             numCols = 4
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
-                self.drugDict[rowIdx, triplicate] = ""
-                self.concDict[rowIdx, triplicate] = ""
         self.receptorSelection = CustomTable(self.dataFrame, 
                                              self.originalData, 
                                              showData=False, 
@@ -264,10 +262,14 @@ class TriplicateGUI:
         self.receptorRemoveButton = tk.Button(self.entryFrame, 
                                               text="Remove receptor", 
                                               command = self.remove_receptor)
+        self.selectAllRowsButton = tk.Button(self.entryFrame,
+                                             text="Select all rows",
+                                             command=self.select_all_rows)
         self.receptorEntry.grid(row=0, column=0)
         self.receptorAddButton.grid(row=1, column=0)
         self.receptorsConfirmButton.grid(row=1, column=1)
         self.receptorRemoveButton.grid(row=1, column=2)
+        self.selectAllRowsButton.grid(row=1, column=3)
         self.receptorsAssigned = False
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
@@ -323,6 +325,7 @@ class TriplicateGUI:
         self.receptorAddButton.grid_forget()
         self.receptorRemoveButton.grid_forget()
         self.receptorsConfirmButton.grid_forget()
+        self.selectAllRowsButton.grid_forget()
 
     def assign_receptors(self):
         self.unload_receptor_gui()
@@ -359,12 +362,17 @@ class TriplicateGUI:
                                      variable=self.concentrationVal,
                                      value = -5,)
         self.radio3 = tk.Radiobutton(self.entryFrame,
-                                     text="No drug",
+                                     text="Non-specific",
                                      variable=self.concentrationVal,
                                      value = 0)
+        self.radio4 = tk.Radiobutton(self.entryFrame,
+                                     text="Totals",
+                                     variable=self.concentrationVal,
+                                     value=1)
         self.radio1.grid(row=0, column=0)
         self.radio2.grid(row=0, column=1)
         self.radio3.grid(row=0, column=2)
+        self.radio4.grid(row=0, column=3)
         self.triplicateEntry = tk.Entry(self.entryFrame)
         self.triplicateEntry.grid(row=1, column=1)
         self.changeButton = tk.Button(self.entryFrame,
@@ -390,6 +398,7 @@ class TriplicateGUI:
         self.currentKey = (rowIdx, tripIdx)
         self.select_triplicate(self.currentKey)
         self.customTable.update_triplet(self.currentKey)
+        self.screening_calculation()
 
     def select_triplicate(self, key):
         self.currentKey = key
@@ -431,6 +440,26 @@ class TriplicateGUI:
             self.selectedRows.remove((rowIdx))
         else:
             self.selectedRows.add((rowIdx))
+
+    def select_all_rows(self):
+        self.selectedRows = set()
+        for row in range(0, 8):
+            if row in self.assignedRows:
+                continue
+            self.selectedRows.add((row))
+            self.receptorSelection.select_row(row)
+
+    def screening_calculation(self):
+        for key, value in self.concDict.items():
+            if value == 0:
+                print("Non-specific")
+            elif value == 1:
+                print("Totals")
+            else:
+                print(f"concentration = {value}")
+        if not all(x in self.drugDict for x in self.dataDict):
+            return
+        print("all results calculated")
 
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
@@ -737,7 +766,7 @@ class CustomTable(tk.Frame):
         self.selectedRows.remove((row))
         self.draw_table()
 
-    def toggle_multi(self, event):
+    def toggle_multi(self):
         self.multiSelect = not self.multiSelect
 
     def check_reset(self):
