@@ -85,12 +85,13 @@ class BindingGUI:
     
     # loads new window from WellDataGUI class to import WellData from text file
     def import_WellData(self):
-        fileName = filedialog.askopenfilename(initialdir=r"e:/PharmOps-sample-data/sample data", 
-                                              title='Select a file', 
-                                              filetypes=(("Text files",
-                                                        "*.txt*"),
-                                                       ("all files",
-                                                        "*.*")))
+        fileName = filedialog.askopenfilename(
+            initialdir=r"e:/PharmOps-sample-data/sample data", 
+            title='Select a file', 
+            filetypes=(("Text files",
+                    "*.txt*"),
+                    ("all files",
+                    "*.*")))
         wellDataList = io.read_raw_well_txt(fileName)
         numPlates = len(wellDataList)
         countPlate, multFactor = self.choose_count_plate(numPlates)
@@ -253,19 +254,19 @@ class TriplicateGUI:
         self.receptorInfo.heading("labels", text="Row Labels")
         self.receptorInfo.pack()
         self.receptorEntry = tk.Entry(self.entryFrame)
-        self.receptorEntry.grid(row=0, column=0)
         self.receptorAddButton = tk.Button(self.entryFrame,
                                            text="Assign receptor",
                                            command = lambda: self.update_receptors(self.receptorEntry.get()))
-        self.receptorAddButton.grid(row=1, column=0)
         self.receptorsConfirmButton = tk.Button(self.entryFrame,
                                                 text="Confirm layout",
                                                 command=self.assign_receptors,
                                                 state='disabled')
-        self.receptorsConfirmButton.grid(row=1, column=1)
         self.receptorRemoveButton = tk.Button(self.entryFrame, 
                                               text="Remove receptor", 
                                               command = self.remove_receptor)
+        self.receptorEntry.grid(row=0, column=0)
+        self.receptorAddButton.grid(row=1, column=0)
+        self.receptorsConfirmButton.grid(row=1, column=1)
         self.receptorRemoveButton.grid(row=1, column=2)
         self.receptorsAssigned = False
         self.dataFrame.pack(fill="both", expand="yes")
@@ -293,8 +294,20 @@ class TriplicateGUI:
         self.selectedRows = set()
         self.ui_state()
 
+    def remove_receptor(self):
+        curItem = self.receptorInfo.focus()
+        itemContents = self.receptorInfo.item(curItem)
+        itemRows = itemContents["values"][0]
+        rowList = itemRows.split(', ')
+        for row in rowList:
+            rowIdx = ord(row) - ord('A')
+            self.assignedRows.remove(rowIdx)
+            self.receptorSelection.unassign_rows([rowIdx])
+        self.receptorInfo.delete(curItem)
+        self.update_treeview()
+        self.ui_state()
+
     def ui_state(self):
-        print(self.assignedRows)
         if len(self.assignedRows) == 8:
             self.receptorsConfirmButton["state"] = "normal"
             self.receptorAddButton["state"] = "disabled"
@@ -317,6 +330,11 @@ class TriplicateGUI:
                                  columns=self.columns, 
                                  show="headings", 
                                  height=1)
+        self.saveTree = ttk.Treeview(self.dataFrame,
+                                     columns=("conc"),
+                                     height=1)
+        self.saveTree.heading("#0", text="Drug Name")
+        self.saveTree.heading("conc", text="Concentration")
         self.customTable = CustomTable(self.dataFrame, 
                                        self.originalData, 
                                        showData=False, 
@@ -329,25 +347,21 @@ class TriplicateGUI:
             self.tree.column(col, width=120, anchor = "center")
         self.tree.pack(expand=True, fill='both')
         self.tree.pack_propagate(0)
+        self.saveTree.pack(expand=True, fill='both')
+        self.saveTree.pack_propagate(0)
         self.concentrationVal = tk.IntVar()
-        def sel():
-            selection = "You selected " + str(self.concentrationVal.get())
-            print(selection)
         self.radio1 = tk.Radiobutton(self.entryFrame,
                                      text="100 nM",
                                      variable=self.concentrationVal,
-                                     value = -7,
-                                     command=sel)
+                                     value = -7,)
         self.radio2 = tk.Radiobutton(self.entryFrame,
                                      text="10 μM",
                                      variable=self.concentrationVal,
-                                     value = -5,
-                                     command=sel)
+                                     value = -5,)
         self.radio3 = tk.Radiobutton(self.entryFrame,
                                      text="No drug",
                                      variable=self.concentrationVal,
-                                     value = 0,
-                                     command=sel)
+                                     value = 0)
         self.radio1.grid(row=0, column=0)
         self.radio2.grid(row=0, column=1)
         self.radio3.grid(row=0, column=2)
@@ -358,19 +372,14 @@ class TriplicateGUI:
                                       command=self.cycle_data)
         self.changeButton.grid(row=2, column=1)
         self.currentKey = (0, 0)
+        self.select_triplicate(self.currentKey)
         self.customTable.update_triplet(self.currentKey)
-        self.tree.insert("", "end", values = self.dataDict[self.currentKey])
-        self.concentrationVal.set(None)
-        print(self.receptorByRow)
 
     def cycle_data(self):
         rowIdx = self.currentKey[0]
         tripIdx = self.currentKey[1]
         if not self.update_current_triplicate(rowIdx, tripIdx):
-            print("nah")
             return
-        print(self.drugDict)
-        print(self.concDict)
         if tripIdx >= 3:
             tripIdx = 0
             rowIdx += 1
@@ -379,16 +388,23 @@ class TriplicateGUI:
         if rowIdx > 7:
             rowIdx = 0
         self.currentKey = (rowIdx, tripIdx)
+        self.select_triplicate(self.currentKey)
         self.customTable.update_triplet(self.currentKey)
 
-    def select_triplicate(self, rowIdx, tripIdx):
-        self.currentKey = (rowIdx, tripIdx)
+    def select_triplicate(self, key):
+        self.currentKey = key
         tripData = self.dataDict[self.currentKey]
         self.triplicateEntry.delete(0, tk.END)
         self.concentrationVal.set(None)
         for row in self.tree.get_children():
             self.tree.delete(row)
+        for row in self.saveTree.get_children():
+            self.saveTree.delete(row)
         self.tree.insert("", "end", values=tripData)
+        if self.currentKey in self.concDict and self.currentKey in self.drugDict:
+            self.saveTree.insert("", "end", 
+                                 text=self.drugDict[self.currentKey],
+                                 values=[self.concDict[self.currentKey]])
 
     def update_current_triplicate(self, rowIdx, tripIdx):
         drugName = self.triplicateEntry.get()
@@ -415,22 +431,6 @@ class TriplicateGUI:
             self.selectedRows.remove((rowIdx))
         else:
             self.selectedRows.add((rowIdx))
-    
-    def remove_receptor(self):
-        curItem = self.receptorInfo.focus()
-        itemContents = self.receptorInfo.item(curItem)
-        itemRows = itemContents["values"][0]
-        rowList = itemRows.split(', ')
-        for row in rowList:
-            rowIdx = ord(row) - ord('A')
-            print(rowIdx)
-            print(self.assignedRows)
-            self.assignedRows.remove(rowIdx)
-            self.receptorSelection.unassign_rows([rowIdx])
-        self.receptorInfo.delete(curItem)
-        self.update_treeview()
-        self.ui_state()
-
 
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
@@ -600,7 +600,13 @@ class DrugReportsGUI:
 # Allows for custom behavior in tabular data like cell selection and highlighting
 
 class CustomTable(tk.Frame):
-    def __init__(self, parent, data, showData=True, onCellSelected=None, selectionType="cell", selectMulti=True):
+    def __init__(self, 
+                 parent, 
+                 data, 
+                 showData=True, 
+                 onCellSelected=None, 
+                 selectionType="cell", 
+                 selectMulti=True):
         
         super().__init__(parent)
         self.on_cell_selected = onCellSelected
@@ -612,7 +618,12 @@ class CustomTable(tk.Frame):
         else:
             self.cellWidth = 30
             self.cellHeight = 15
-        self.canvas = tk.Canvas(self, bg="white", bd=0, highlightthickness=0, height=self.cellHeight*8)
+        self.canvas = tk.Canvas(self, 
+                                bg="white", 
+                                bd=0, 
+                                highlightthickness=0, 
+                                height=self.cellHeight*8, 
+                                width=self.cellWidth*12)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.canvas.bind("<Button-1>", self.handle_click)
         self.data = data
@@ -656,7 +667,7 @@ class CustomTable(tk.Frame):
                 tripIdx = col // 3
                 self.update_triplet((row, tripIdx))
                 if self.on_cell_selected:
-                    self.on_cell_selected(row, tripIdx)    
+                    self.on_cell_selected((row, tripIdx))    
             case "row":
                 self.select_row(event) # here for debugging
                 if self.on_cell_selected:
