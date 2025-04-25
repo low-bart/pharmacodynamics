@@ -282,6 +282,7 @@ class TriplicateGUI:
         if receptorName == "" or self.selectedRows == set():
             return
         self.receptorSelection.assign_rows()
+        self.receptorList[receptorName] = self.selectedRows
         self.receptorEntry.delete(0, tk.END)
         rowLetters = [chr(ord('A') + row) for row in self.selectedRows]
         rowString = ', '.join(rowLetters)
@@ -300,7 +301,9 @@ class TriplicateGUI:
         curItem = self.receptorInfo.focus()
         itemContents = self.receptorInfo.item(curItem)
         itemRows = itemContents["values"][0]
+        receptorName = itemContents["text"]
         rowList = itemRows.split(', ')
+        self.receptorList.pop(receptorName)
         for row in rowList:
             rowIdx = ord(row) - ord('A')
             self.assignedRows.remove(rowIdx)
@@ -328,6 +331,7 @@ class TriplicateGUI:
         self.selectAllRowsButton.grid_forget()
 
     def assign_receptors(self):
+        print(self.receptorList)
         self.unload_receptor_gui()
         self.tree = ttk.Treeview(self.dataFrame, 
                                  columns=self.columns, 
@@ -450,16 +454,22 @@ class TriplicateGUI:
             self.receptorSelection.select_row(row)
 
     def screening_calculation(self):
-        for key, value in self.concDict.items():
-            if value == 0:
-                print("Non-specific")
-            elif value == 1:
-                print("Totals")
-            else:
-                print(f"concentration = {value}")
         if not all(x in self.drugDict for x in self.dataDict):
             return
-        print("all results calculated")
+        results = {}
+        for key, drugName in self.drugDict.items():
+            conc = self.concDict[key]
+            data = self.dataDict[key]
+            receptor = self.receptorByRow[key[0]]
+            if drugName not in results:
+                results[drugName] = {}
+            if receptor not in results[drugName]:
+                results[drugName][receptor] = {}
+            if conc not in results[drugName][receptor]:
+                results[drugName][receptor][conc] = []
+            results[drugName][receptor][conc].append(val for val in data)
+        print(results)
+            
 
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
