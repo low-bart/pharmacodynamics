@@ -469,31 +469,59 @@ class TriplicateGUI:
             self.selectedRows.add((rowIdx))
 
     def select_all_rows(self):
+        previouslySelected = set()
+        for row in self.selectedRows:
+            previouslySelected.add(row)
         self.selectedRows = set()
         for row in range(0, 8):
             if row in self.assignedRows:
                 continue
             self.selectedRows.add((row))
+            if row in previouslySelected:
+                continue
             self.receptorSelection.select_row(row)
 
     def screening_calculation(self):
         if not all(x in self.drugDict for x in self.dataDict):
-            return
+            #return
+            a = 1
         results = {}
+        averages = {}
+        sem = {}
         nonSpecific = {receptor: [] for receptor in self.receptorList}
         totals = {receptor: [] for receptor in self.receptorList}
         for key, drugName in self.drugDict.items():
             conc = self.concDict[key]
             data = self.dataDict[key]
             receptor = self.receptorByRow[key[0]]
-            if drugName not in results:
-                results[drugName] = {}
-            if receptor not in results[drugName]:
-                results[drugName][receptor] = {}
-            if conc not in results[drugName][receptor]:
-                results[drugName][receptor][conc] = []
-            results[drugName][receptor][conc].append([val for val in data])
+            if receptor not in results:
+                results[receptor] = {}
+                averages[receptor] = {}
+                sem[receptor] = {}
+            if drugName not in results[receptor]:
+                results[receptor][drugName] = {}
+                averages[receptor][drugName] = {}
+                sem[receptor][drugName] = {}
+            if conc not in results[receptor][drugName]:
+                results[receptor][drugName][conc] = []
+            results[receptor][drugName][conc].append([val for val in data])
+        for receptor, drugs in results.items():
+            for drugName, concentrations in drugs.items():
+                if drugName == "None":
+                    nonSpecific[receptor] = np.mean(concentrations["Non Specific"])
+                    totals[receptor] = np.mean(concentrations["Totals"])
+                    continue
+                for conc, values in concentrations.items():
+                    averages[receptor][drugName][conc] = np.mean(values)
+                    sem[receptor][drugName][conc] = np.std(values)/np.sqrt(len(values))
+
+        print(nonSpecific)
+        print(totals)
         print(results)
+        print(averages)
+        print(sem)
+
+
 
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
