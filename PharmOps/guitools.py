@@ -233,6 +233,7 @@ class TriplicateGUI:
         self.dataDict = {}
         self.drugDict = {}
         self.concDict = {}
+        self.nameRequired = True
         self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
         for rowIdx, row in plateData.iterrows():
             numCols = 4
@@ -360,19 +361,23 @@ class TriplicateGUI:
         self.radio1 = tk.Radiobutton(self.entryFrame,
                                      text="100 nM",
                                      variable=self.concentrationVal,
-                                     value = -7,)
+                                     value = -7,
+                                     command = self.enable_entries)
         self.radio2 = tk.Radiobutton(self.entryFrame,
                                      text="10 μM",
                                      variable=self.concentrationVal,
-                                     value = -5,)
+                                     value = -5,
+                                     command = self.enable_entries)
         self.radio3 = tk.Radiobutton(self.entryFrame,
                                      text="Non-specific",
                                      variable=self.concentrationVal,
-                                     value = 0)
+                                     value = 0,
+                                     command = self.disable_entries)
         self.radio4 = tk.Radiobutton(self.entryFrame,
                                      text="Totals",
                                      variable=self.concentrationVal,
-                                     value=1)
+                                     value=1,
+                                     command = self.disable_entries)
         self.radio1.grid(row=0, column=0)
         self.radio2.grid(row=0, column=1)
         self.radio3.grid(row=0, column=2)
@@ -386,6 +391,14 @@ class TriplicateGUI:
         self.currentKey = (0, 0)
         self.select_triplicate(self.currentKey)
         self.customTable.update_triplet(self.currentKey)
+
+    def enable_entries(self):
+        self.nameRequired = True
+        self.triplicateEntry["state"] = "normal"
+
+    def disable_entries(self):
+        self.nameRequired = False
+        self.triplicateEntry["state"] = "disabled"
 
     def cycle_data(self):
         rowIdx = self.currentKey[0]
@@ -403,6 +416,7 @@ class TriplicateGUI:
         self.select_triplicate(self.currentKey)
         self.customTable.update_triplet(self.currentKey)
         self.screening_calculation()
+        self.enable_entries()
 
     def select_triplicate(self, key):
         self.currentKey = key
@@ -420,7 +434,10 @@ class TriplicateGUI:
                                  values=[self.concDict[self.currentKey]])
 
     def update_current_triplicate(self, rowIdx, tripIdx):
-        drugName = self.triplicateEntry.get()
+        if self.nameRequired:
+            drugName = self.triplicateEntry.get()
+        else:
+            drugName = "None"
         if drugName == "":
             print("Enter a drug name")
             return 0
@@ -433,6 +450,12 @@ class TriplicateGUI:
             concVal = self.concentrationVal.get()
         except:
             concVal = None
+        match(concVal):
+            case 0:
+                concVal = "Non Specific"
+            case 1:
+                concVal = "Totals"
+
         self.drugDict[self.currentKey] = drugName
         self.concDict[self.currentKey] = concVal
         return 1
@@ -457,6 +480,8 @@ class TriplicateGUI:
         if not all(x in self.drugDict for x in self.dataDict):
             return
         results = {}
+        nonSpecific = {receptor: [] for receptor in self.receptorList}
+        totals = {receptor: [] for receptor in self.receptorList}
         for key, drugName in self.drugDict.items():
             conc = self.concDict[key]
             data = self.dataDict[key]
@@ -467,9 +492,8 @@ class TriplicateGUI:
                 results[drugName][receptor] = {}
             if conc not in results[drugName][receptor]:
                 results[drugName][receptor][conc] = []
-            results[drugName][receptor][conc].append(val for val in data)
+            results[drugName][receptor][conc].append([val for val in data])
         print(results)
-            
 
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
@@ -637,7 +661,6 @@ class DrugReportsGUI:
             ))
 
 # Allows for custom behavior in tabular data like cell selection and highlighting
-
 class CustomTable(tk.Frame):
     def __init__(self, 
                  parent, 
@@ -948,4 +971,3 @@ class TemplateGUI:
             for drug in range(lowRange, highRange):
                 self.drugNames.append(drug)
         TemplateGenerator(saveDir, self.drugNames, self.standardsDict)
-
