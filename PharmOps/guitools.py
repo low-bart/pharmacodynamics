@@ -5,7 +5,6 @@ import numpy as np
 import h5py
 from bindMods import SummaryTable, TemplateGenerator
 import os
-import time
 
 # Class for the gui window that acts as home screen
 class BindingGUI:
@@ -210,7 +209,15 @@ class BindingGUI:
         self.main.wait_window(newWindow)
 
     def parse_triplicates(self):
-        wellDataList = io.read_raw_well_txt(r"e:\PharmOps-sample-data\sample data\110824_raw data.txt")
+        
+        fileName = filedialog.askopenfilename(
+            initialdir="~", 
+            title='Select a file', 
+            filetypes=(("Text files",
+                    "*.txt*"),
+                    ("all files",
+                    "*.*")))
+        wellDataList = io.read_raw_well_txt(fileName)
         plate = wellDataList[0]
         newWindow = tk.Toplevel(self.main)
         TriplicateGUI(newWindow, plate)
@@ -521,8 +528,6 @@ class TriplicateGUI:
         print(averages)
         print(sem)
 
-
-
 # guitools for displaying and manipulating new and saved WellData        
 class WellDataGUI:
     def __init__(self, main, plate):
@@ -716,12 +721,17 @@ class CustomTable(tk.Frame):
                                 width=self.cellWidth*12)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.canvas.bind("<Button-1>", self.handle_click)
+        self.canvas.bind("<B1-Motion>", self.handle_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.handle_release)
         self.data = data
         self.selectedCells = set()
         self.selectedTriplets = set()
         self.selectedRows = set()
         self.assignedRows = set()
         self.multiSelect = selectMulti
+        self.selectionCoords = {"x":0, "y":0, "x2":0, "y2":0}
+        self.selectionRect = []
+        self.startingCell = []
         self.draw_table()
 
     def draw_table(self):
@@ -744,7 +754,10 @@ class CustomTable(tk.Frame):
                 self.canvas.create_rectangle(x1, y1, x2, y2, outline="green", width=3)
 
     def handle_click(self, event):
+        self.selectionCoords["x"] = event.x
+        self.selectionCoords["y"] = event.y
         row, col = self.cell_coordinates(event)
+        self.startingCell = (row, col)
         match self.highlightType:
             case "cell":
                 if (row, col) in self.selectedCells:
@@ -764,13 +777,42 @@ class CustomTable(tk.Frame):
                     self.on_cell_selected(row)
         self.draw_table()
     
+    def handle_drag(self, event):
+        previousX = self.selectionCoords["x2"]
+        previousY = self.selectionCoords["y2"]
+        self.selectionCoords["x2"] = event.x
+        self.selectionCoords["y2"] = event.y
+        event.x = previousX
+        event.y = previousY
+        self.canvas.delete(self.selectionRect)
+
+        self.selectionRect = self.canvas.create_rectangle(
+            self.selectionCoords["x"],
+            self.selectionCoords["y"],
+            self.selectionCoords["x2"],
+            self.selectionCoords["y2"])
+
+    def handle_release(self, event):
+        currentCell = self.cell_coordinates(event)
+        if currentCell != self.startingCell:
+            startRow = min(self.startingCell[0], currentCell[0])
+            endRow = max(self.startingCell[0], currentCell[0])
+            startCol = min(self.startingCell[1], currentCell[1])
+            endCol = max(self.startingCell[1], currentCell[1])
+            print(range(self.startingCell[0], currentCell[0]))
+            for row in range(startRow, endRow + 1):
+                for col in range(startCol, endCol + 1):
+                    self.select_cell(None, row, col)
+
     def cell_coordinates(self, event):
         row = event.y // self.cellHeight
         col = event.x // self.cellWidth
         return row, col
 
-    def select_cell(self, event):
-        row, col = self.cell_coordinates(event)
+    def select_cell(self, event, row=None, col=None):
+        print(row, col)
+        if row == None or col == None:
+            row, col = self.cell_coordinates(event)
         if (row, col) not in self.data:
             return
         if (row, col) in self.selectedCells:
