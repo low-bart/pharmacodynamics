@@ -5,6 +5,8 @@ import numpy as np
 import h5py
 from bindMods import SummaryTable, TemplateGenerator
 import os
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 # Class for the gui window that acts as home screen
 class BindingGUI:
@@ -223,476 +225,121 @@ class BindingGUI:
         TriplicateGUI(newWindow, plate)
         self.main.wait_window(newWindow)
 
-# allows for manual entry of triplicate data and concentrations
-class TriplicateGUI:
-    def __init__(self, main, plate):
-        self.selectedRows = set()
-        self.assignedRows = set()
-        self.receptorByRow = 8*[None]
-        self.main = main
-        self.dataFrame = tk.Frame(self.main)
-        self.entryFrame = tk.Frame(self.main,
-                                   )
-        self.columns = ["1", "2", "3"]
-        self.receptorList = {}
-        self.plate = plate
-        plateData = plate.data.reset_index(drop=True)
-        self.dataDict = {}
-        self.drugDict = {}
-        self.concDict = {}
-        self.nameRequired = True
-        self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
-        for rowIdx, row in plateData.iterrows():
-            numCols = 4
-            for triplicate in range(0, numCols):
-                self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
-        self.receptorSelection = CustomTable(self.dataFrame, 
-                                             self.originalData, 
-                                             showData=False, 
-                                             onCellSelected=self.update_selected_row, 
-                                             selectionType="row", 
-                                             selectMulti=True)
-        self.receptorSelection.pack(expand=True, fill='both')
-        self.receptorInfo = ttk.Treeview(self.dataFrame,
-                                         columns=("labels"),
-                                         height=1)
-        self.receptorInfo.heading("#0", text="Receptor Name")
-        self.receptorInfo.heading("labels", text="Row Labels")
-        self.receptorInfo.pack()
-        self.receptorEntry = tk.Entry(self.entryFrame)
-        self.receptorAddButton = tk.Button(self.entryFrame,
-                                           text="Assign receptor",
-                                           command = lambda: self.update_receptors(self.receptorEntry.get()))
-        self.receptorsConfirmButton = tk.Button(self.entryFrame,
-                                                text="Confirm layout",
-                                                command=self.assign_receptors,
-                                                state='disabled')
-        self.receptorRemoveButton = tk.Button(self.entryFrame, 
-                                              text="Remove receptor", 
-                                              command = self.remove_receptor)
-        self.selectAllRowsButton = tk.Button(self.entryFrame,
-                                             text="Select all rows",
-                                             command=self.select_all_rows)
-        self.receptorEntry.grid(row=0, column=0)
-        self.receptorAddButton.grid(row=1, column=0)
-        self.receptorsConfirmButton.grid(row=1, column=1)
-        self.receptorRemoveButton.grid(row=1, column=2)
-        self.selectAllRowsButton.grid(row=1, column=3)
-        self.receptorsAssigned = False
-        self.dataFrame.pack(fill="both", expand="yes")
-        self.entryFrame.pack(fill="both", expand="yes")
-      
-    def update_treeview(self):
-        rowCount = len(self.receptorInfo.get_children()) + 1
-        self.receptorInfo.config(height=rowCount)
+# abstract base class to inherit modes of cell selection from
+class SelectionStrategy(ABC):
+    @abstractmethod
+    def on_click(self, row, col, event, currentSelection):
+        pass
+
+    def on_drag(self, row, col, event, currentSelection):
+        return currentSelection
+    
+    def on_release(self, row, col, event, currentSelection):
+        return currentSelection
+    
+    def get_selected_cells(self):
+        pass
+
+    def get_locked_cells(self):
+        return {}
+    
+# select the cell that was clicked
+class SingleCellSelector(SelectionStrategy):
+    def __init__(self, selectedCells, lockedCells):
+        self.selectedCells = selectedCells
+        self.lockedCells = lockedCells
+
+    def on_click(self, row, col):
+        if (row, col) not in self.lockedCells:
+            self.selectedCells.clear()
+            self.selectedCells.add((row, col))
+
+# select the triplet containing the cell that was clicked
+class TripletSelector(SelectionStrategy):
+    def __init__(self, selectedTriplets, lockedTriplets):
+        self.selectedTriplets = selectedTriplets
+        self.lockedTriplets = lockedTriplets
+
+    def on_click(self, row, col):
+        triplet = col // 3
+        print(f"{row, triplet} printed from selectionStrat")
+        if (row, triplet) in self.selectedTriplets:
+            self.selectedTriplets.remove((row, triplet))
+            return
+        self.selectedTriplets.clear()
+        self.selectedTriplets.add((row, triplet))
+
+    def get_selected_cells(self):
+        return{(row, col) 
+               for (row, startCol) in self.selectedTriplets 
+               for col in range(startCol*3, startCol*3 + 3)}
+
+class RowSelector(SelectionStrategy):
+    def __init__(self, selectedRows, lockedRows):
+        self.selectedRows = selectedRows
+        self.lockedRows = lockedRows
+
+    def on_click(self, row, col):
+        if row in self.lockedRows:
+            return
+        if row in self.selectedRows:
+            self.selectedRows.remove(row)
+            return
+        #self.selectedRows.clear() #commented out while i figure out how to divide multiselect
+        self.selectedRows.add(row)
+
+    def get_selected_cells(self):
+        return {(row, col)
+                for row in self.selectedRows
+                for col in range(0, 12)}
+    
+    def get_locked_cells(self):
+        return{(row, col)
+               for row in self.lockedRows
+               for col in range(0, 12)}
+    
+@dataclass
+class CellStyle:
+    fill: str = "white"
+    outline: str = "black"
+    text: str = ""
+    font: str = "TkDefaultFont"
+    width: int = 1
+
+class CellStyleResolver(ABC):
+    @abstractmethod
+    def get_cell_style(self, row, col) -> CellStyle:
+        # returns drawing properties for different contexts
+        pass
+
+class HighlightSelection(CellStyleResolver):
+    def __init__(self, selectionSet, selectionStrategy):
+        self.selectionSet = selectionSet
+        self.strategy = selectionStrategy
+
+    def get_cell_style(self, row, col):
+        parentSelection = self.strategy.get_selected_cells()
+        if (row, col) in parentSelection:
+            return CellStyle(fill="white", outline="red", width=3)
+        else:
+            return CellStyle
         
-    def update_receptors(self, receptorName):
-        if receptorName == "" or self.selectedRows == set():
-            return
-        self.receptorSelection.assign_rows()
-        self.receptorList[receptorName] = self.selectedRows
-        self.receptorEntry.delete(0, tk.END)
-        rowLetters = [chr(ord('A') + row) for row in self.selectedRows]
-        rowString = ', '.join(rowLetters)
-        for i in self.selectedRows:
-            self.assignedRows.add(i)
-            self.receptorByRow[i] = receptorName
-        self.update_treeview()
-        self.receptorInfo.insert("", 
-                                tk.END, 
-                                text=receptorName,
-                                values=[rowString])
-        self.selectedRows = set()
-        self.ui_state()
+class HighlightAndLockSelection(CellStyleResolver):
+    def __init__(self, selectionSet, lockedCells, selectionStrategy):
+        self.selectionSet = selectionSet
+        self.lockedCells = lockedCells
+        self.strategy = selectionStrategy
 
-    def remove_receptor(self):
-        curItem = self.receptorInfo.focus()
-        itemContents = self.receptorInfo.item(curItem)
-        itemRows = itemContents["values"][0]
-        receptorName = itemContents["text"]
-        rowList = itemRows.split(', ')
-        self.receptorList.pop(receptorName)
-        for row in rowList:
-            rowIdx = ord(row) - ord('A')
-            self.assignedRows.remove(rowIdx)
-            self.receptorSelection.unassign_rows([rowIdx])
-        self.receptorInfo.delete(curItem)
-        self.update_treeview()
-        self.ui_state()
-
-    def ui_state(self):
-        if len(self.assignedRows) == 8:
-            self.receptorsConfirmButton["state"] = "normal"
-            self.receptorAddButton["state"] = "disabled"
-            self.receptorEntry["state"] = "disabled"
+    def get_cell_style(self, row, col):
+        parentSelection = self.strategy.get_selected_cells()
+        parentLock = self.strategy.get_locked_cells()
+        if (row, col) in parentSelection:
+            return CellStyle(fill="white", outline="red", width=3)
+        elif (row, col) in parentLock:
+            return CellStyle(fill="gold", outline="green", width=3)
         else:
-            self.receptorsConfirmButton["state"] = "disabled"
-            self.receptorAddButton["state"] = "normal"
-            self.receptorEntry["state"] = "normal"
-
-    def unload_receptor_gui(self):
-        self.receptorSelection.pack_forget()
-        self.receptorEntry.grid_forget()
-        self.receptorAddButton.grid_forget()
-        self.receptorRemoveButton.grid_forget()
-        self.receptorsConfirmButton.grid_forget()
-        self.selectAllRowsButton.grid_forget()
-
-    def assign_receptors(self):
-        print(self.receptorList)
-        self.unload_receptor_gui()
-        self.tree = ttk.Treeview(self.dataFrame, 
-                                 columns=self.columns, 
-                                 show="headings", 
-                                 height=1)
-        self.saveTree = ttk.Treeview(self.dataFrame,
-                                     columns=("conc"),
-                                     height=1)
-        self.saveTree.heading("#0", text="Drug Name")
-        self.saveTree.heading("conc", text="Concentration")
-        self.customTable = CustomTable(self.dataFrame, 
-                                       self.originalData, 
-                                       showData=False, 
-                                       onCellSelected=self.select_triplicate, 
-                                       selectionType="triplet", 
-                                       selectMulti=False)
-        self.customTable.pack(expand=True, fill='both')
-        for col in self.columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=120, anchor = "center")
-        self.tree.pack(expand=True, fill='both')
-        self.tree.pack_propagate(0)
-        self.saveTree.pack(expand=True, fill='both')
-        self.saveTree.pack_propagate(0)
-        self.concentrationVal = tk.IntVar()
-        self.radio1 = tk.Radiobutton(self.entryFrame,
-                                     text="100 nM",
-                                     variable=self.concentrationVal,
-                                     value = -7,
-                                     command = self.enable_entries)
-        self.radio2 = tk.Radiobutton(self.entryFrame,
-                                     text="10 μM",
-                                     variable=self.concentrationVal,
-                                     value = -5,
-                                     command = self.enable_entries)
-        self.radio3 = tk.Radiobutton(self.entryFrame,
-                                     text="Non-specific",
-                                     variable=self.concentrationVal,
-                                     value = 0,
-                                     command = self.disable_entries)
-        self.radio4 = tk.Radiobutton(self.entryFrame,
-                                     text="Totals",
-                                     variable=self.concentrationVal,
-                                     value=1,
-                                     command = self.disable_entries)
-        self.radio1.grid(row=0, column=0)
-        self.radio2.grid(row=0, column=1)
-        self.radio3.grid(row=0, column=2)
-        self.radio4.grid(row=0, column=3)
-        self.triplicateEntry = tk.Entry(self.entryFrame)
-        self.triplicateEntry.grid(row=1, column=1)
-        self.changeButton = tk.Button(self.entryFrame,
-                                      text="Save entries",
-                                      command=self.cycle_data)
-        self.changeButton.grid(row=2, column=1)
-        self.currentKey = (0, 0)
-        self.select_triplicate(self.currentKey)
-        self.customTable.update_triplet(self.currentKey)
-
-    def enable_entries(self):
-        self.nameRequired = True
-        self.triplicateEntry["state"] = "normal"
-
-    def disable_entries(self):
-        self.nameRequired = False
-        self.triplicateEntry["state"] = "disabled"
-
-    def cycle_data(self):
-        rowIdx = self.currentKey[0]
-        tripIdx = self.currentKey[1]
-        if not self.update_current_triplicate(rowIdx, tripIdx):
-            return
-        if tripIdx >= 3:
-            tripIdx = 0
-            rowIdx += 1
-        else:
-            tripIdx += 1
-        if rowIdx > 7:
-            rowIdx = 0
-        self.currentKey = (rowIdx, tripIdx)
-        self.select_triplicate(self.currentKey)
-        self.customTable.update_triplet(self.currentKey)
-        self.screening_calculation()
-        self.enable_entries()
-
-    def select_triplicate(self, key):
-        self.currentKey = key
-        tripData = self.dataDict[self.currentKey]
-        self.triplicateEntry.delete(0, tk.END)
-        self.concentrationVal.set(None)
-        for row in self.tree.get_children():
-            self.tree.delete(row)
-        for row in self.saveTree.get_children():
-            self.saveTree.delete(row)
-        self.tree.insert("", "end", values=tripData)
-        if self.currentKey in self.concDict and self.currentKey in self.drugDict:
-            self.saveTree.insert("", "end", 
-                                 text=self.drugDict[self.currentKey],
-                                 values=[self.concDict[self.currentKey]])
-
-    def update_current_triplicate(self, rowIdx, tripIdx):
-        if self.nameRequired:
-            drugName = self.triplicateEntry.get()
-        else:
-            drugName = "None"
-        if drugName == "":
-            print("Enter a drug name")
-            return 0
-        try:
-            concVal = self.concentrationVal.get()
-        except:
-            print("Select a concentration")
-            return 0
-        try:
-            concVal = self.concentrationVal.get()
-        except:
-            concVal = None
-        match(concVal):
-            case 0:
-                concVal = "Non Specific"
-            case 1:
-                concVal = "Totals"
-
-        self.drugDict[self.currentKey] = drugName
-        self.concDict[self.currentKey] = concVal
-        return 1
-
-    def update_selected_row(self, rowIdx):
-        if rowIdx in self.assignedRows:
-            return
-        if rowIdx in self.selectedRows:
-            self.selectedRows.remove((rowIdx))
-        else:
-            self.selectedRows.add((rowIdx))
-
-    def select_all_rows(self):
-        previouslySelected = set()
-        for row in self.selectedRows:
-            previouslySelected.add(row)
-        self.selectedRows = set()
-        for row in range(0, 8):
-            if row in self.assignedRows:
-                continue
-            self.selectedRows.add((row))
-            if row in previouslySelected:
-                continue
-            self.receptorSelection.select_row(row)
-
-    def screening_calculation(self):
-        if not all(x in self.drugDict for x in self.dataDict):
-            #return
-            a = 1
-        results = {}
-        averages = {}
-        sem = {}
-        nonSpecific = {receptor: [] for receptor in self.receptorList}
-        totals = {receptor: [] for receptor in self.receptorList}
-        for key, drugName in self.drugDict.items():
-            conc = self.concDict[key]
-            data = self.dataDict[key]
-            receptor = self.receptorByRow[key[0]]
-            if receptor not in results:
-                results[receptor] = {}
-                averages[receptor] = {}
-                sem[receptor] = {}
-            if drugName not in results[receptor]:
-                results[receptor][drugName] = {}
-                averages[receptor][drugName] = {}
-                sem[receptor][drugName] = {}
-            if conc not in results[receptor][drugName]:
-                results[receptor][drugName][conc] = []
-            results[receptor][drugName][conc].append([val for val in data])
-        for receptor, drugs in results.items():
-            for drugName, concentrations in drugs.items():
-                if drugName == "None":
-                    nonSpecific[receptor] = np.mean(concentrations["Non Specific"])
-                    totals[receptor] = np.mean(concentrations["Totals"])
-                    continue
-                for conc, values in concentrations.items():
-                    averages[receptor][drugName][conc] = np.mean(values)
-                    sem[receptor][drugName][conc] = np.std(values)/np.sqrt(len(values))
-
-        print(nonSpecific)
-        print(totals)
-        print(results)
-        print(averages)
-        print(sem)
-
-# guitools for displaying and manipulating new and saved WellData        
-class WellDataGUI:
-    def __init__(self, main, plate):
-        self.main = main
-        self.dataFrame = tk.Frame(self.main)
-        self.entryFrame = tk.Frame(self.main)
-        self.plate = plate
-        plateData = plate.data.reset_index(drop=True)
-        dataDict = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
-        #dataDict = plate.data.to_dict(orient='index')
-        #dataDict = {rowKey: {str(colKey): value for colKey, value in colValues.items()} for rowKey, colValues in dataDict.items()}
-        #self.model = TableModel()
-        #self.model.importDict(dataDict)
-        #self.frame.grid(row=0, column=0, columnspan=4, sticky="N, E, W")
-        self.dataFrame.pack(fill="both", expand="yes")
-        self.entryFrame.pack(fill="both", expand="yes")
-        self.customTable = CustomTable(self.dataFrame, dataDict)
-        self.customTable.pack(fill=tk.BOTH, expand=True)
-        #self.table = TableCanvas(self.dataFrame, model=self.model, read_only=True)
-        #self.table.show()
-        self.main.after(100, self.adjust_window_width)
-        self.drugLabels = ["Drug 1: ", "Drug 2: ", "Drug 3: ", "Drug 4: "]
-        self.drugEntries = []
-        self.concentrationLabels = ["Highest concentration 1: ", "Highest concentration 2: ", "Highest concentration 3: ", "Highest concentration 4: "]
-        self.concentrationEntries = []
-        receptorLabel = ttk.Label(self.entryFrame, text="Receptor name: ")
-        receptorLabel.grid(row=5, column=0, sticky="E")
-        self.receptorName = ttk.Entry(self.entryFrame)
-        self.receptorName.grid(row=5, column=1, sticky="W")
-        makeReportButton = ttk.Button(self.entryFrame, text="Make new drug reports", command=self.make_drug_reports)
-        makeReportButton.grid(row=7, column=1, columnspan=2)
-        self.h5Path = io.get_default_h5_path()
-        self.recentComment = tk.StringVar(self.entryFrame)
-        addCommentButton = ttk.Button(self.entryFrame, 
-                                  text="Add comment", 
-                                  command=lambda: self.add_comment(self.recentComment.get()))
-        self.recentCommentField = ttk.Entry(self.entryFrame, textvariable=self.recentComment)
-        addCommentButton.grid(row=6, column=1)
-        self.recentCommentField.grid(row=6, column=2)
-
-        for i, labelText in enumerate(self.drugLabels):
-            drugEntry = self.create_drug_entry(self.entryFrame, labelText, i + 1, 1)
-            self.drugEntries.append(drugEntry)
-
-        for i, labelText in enumerate(self.concentrationLabels):
-            concEntry = self.create_drug_entry(self.entryFrame, labelText, i + 1, 2)
-            self.concentrationEntries.append(concEntry)
-
-    def adjust_window_width(self):
-        numCols = 12
-        numRows = 8
-        colWidth = self.customTable.cellWidth
-        totalWidth = numCols * colWidth
-        colHeight = self.customTable.cellHeight
-        totalHeight = numRows * colHeight
-        self.dataFrame.height = totalHeight
-        self.main.geometry(f"{totalWidth}x500")
-
-    def add_comment(self, comment):
-        print("comment added")
-        self.plate.add_comment(comment)
-        self.plate.display()
-        self.recentCommentField.delete(0, 'end')
-
-    def create_drug_entry(self, parent, labelText, row, entryNo):
-        entryVar = tk.StringVar()
-        label = ttk.Label(parent, text=labelText)
-        label.grid(row=row, column=(entryNo*2)-2, padx=5, pady=5, sticky="E")
-        entry = ttk.Entry(parent, textvariable=entryVar)
-        entry.grid(row=row, column=(entryNo*2)-1, padx=5, pady=5, sticky="W")
-        return entryVar
-
-    def make_drug_reports(self):
-        self.validate_user_input()
-        self.update_plate()
-        reports = self.plate.make_all_drug_reports()
-        for report in reports:
-            io.save_new_DrugReport(report, self.h5Path)
-        print(f"Reports saved to {self.h5Path}")
-        self.main.destroy()
-        self.main.update()
-    
-    def validate_user_input(self):
-        floatReg ="\d+\.\d+|(?<=angle\s)\d+"    # cursed regular expression to validate float or int
-        for entry in self.concentrationEntries:
-            try: 
-                float(entry.get())
-            except ValueError:
-                raise TypeError('bad datatype for concentration: enter int or float')
-            
-    def update_plate(self):
-        for i, entry in enumerate(self.drugEntries):
-            self.plate.update_conc(float(self.concentrationEntries[i].get()), i)
-            self.plate.update_drugs(entry.get(), i) 
-        self.plate.update_receptor(self.receptorName.get())
-
-# gui class for displaying saved DrugReports from h5
-class DrugReportsGUI:
-    def __init__(self, main):
-        self.main = main
-        self.main.geometry("600x300")
-        self.h5Path = io.get_default_h5_path()
-        self.h5File = h5py.File(self.h5Path, "r")
-        self.drugs = list(self.h5File["reports"].keys())
-        self.dataset = {drug: self.h5File["reports"][drug] for drug in self.drugs}
-        self.drugLabel = tk.Label(self.main, text="Select a drug: ")
-        self.drugLabel.grid(row=0, column=0, sticky="NEW")
-        self.drugSelected = tk.StringVar()
-        self.drugDrop = ttk.Combobox(self.main, textvariable=self.drugSelected, values=self.drugs)
-        self.drugDrop.grid(row=0, column=1, sticky="NW")
-        self.receptorLabel = tk.Label(self.main, text="Select a receptor: ")
-        self.receptorLabel.grid(row=1, column=0, sticky="NEW")
-        self.receptorClicked = tk.StringVar()
-        self.receptorDrop = ttk.Combobox(self.main, textvariable=self.receptorClicked)
-        self.receptorDrop.grid(row=1, column=1, sticky="NW")
-        self.dateLabel = tk.Label(self.main, text="Select an assay date: ")
-        self.dateLabel.grid(row=2, column=0, sticky="NEW")
-        self.dateSelected = tk.StringVar()
-        self.dateDrop = ttk.Combobox(self.main, textvariable=self.dateSelected)
-        self.dateDrop.grid(row=2, column=1, sticky="NW")
-        self.drugDrop.bind("<<ComboboxSelected>>", lambda event: self.update_receptors(event))
-        self.receptorDrop.bind("<<ComboboxSelected>>", lambda event: self.update_dates(event))
-        self.dateDrop.bind("<<ComboboxSelected>>", lambda event: self.update_DrugReports_GUI(event))
-        self.columns = ["Average", "Specific", "[Drug]", "Log [Drug]", "Pct Total"]
-        self.tree = ttk.Treeview(self.main, columns=self.columns, show="headings")
-        for col in self.columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=120, anchor="center")
-        self.tree.grid(row=3, column=0, columnspan=3, sticky="E, W")
-        self.main.grid_columnconfigure(0, weight=1)
-
-    def update_receptors(self, event):
-        self.selectedDrug = self.drugDrop.get()
-        if self.selectedDrug:
-            receptorKeys = list(self.dataset[self.selectedDrug].keys())
-            self.receptorDrop['values'] = receptorKeys
-            self.receptorDrop.set('')
-        else:
-            print("No drug selected.")
-
-    def update_dates(self, event):
-        self.selectedReceptor = self.receptorDrop.get()
-        if self.selectedReceptor:
-            dateKeys = list(self.dataset[self.selectedDrug][self.selectedReceptor].keys())
-            self.dateDrop['values'] = dateKeys
-            self.dateDrop.set('')
-        else:
-            print("No date selected")
-    
-    def update_DrugReports_GUI(self, event):
-        selectedDate = self.dateDrop.get()
-        currentDrugReport = io.load_h5_DrugReports(self.selectedDrug, self.selectedReceptor, selectedDate, self.h5Path)
-
-        for row in self.tree.get_children():
-            self.tree.delete(row)
-
-        for i in range(len(currentDrugReport.average)):
-            self.tree.insert("", "end", values=(
-                currentDrugReport.average[i],
-                currentDrugReport.specific[i],
-                currentDrugReport.concentration[i],
-                currentDrugReport.logConc[i],
-                currentDrugReport.pctTotal[i]
-            ))
-
+            return CellStyle
+        
 # Allows for custom behavior in tabular data like cell selection and highlighting
 class CustomTable(tk.Frame):
     def __init__(self, 
@@ -701,7 +348,8 @@ class CustomTable(tk.Frame):
                  showData=True, 
                  onCellSelected=None, 
                  selectionType="cell", 
-                 selectMulti=True):
+                 selectMulti=True,
+                 cellStyle: CellStyleResolver=None):
         
         super().__init__(parent)
         self.on_cell_selected = onCellSelected
@@ -720,9 +368,10 @@ class CustomTable(tk.Frame):
                                 height=self.cellHeight*8, 
                                 width=self.cellWidth*12)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-        self.canvas.bind("<Button-1>", self.handle_click)
-        self.canvas.bind("<B1-Motion>", self.handle_drag)
-        self.canvas.bind("<ButtonRelease-1>", self.handle_release)
+        self.bindings = {}
+        #self.canvas.bind("<Button-1>", self.handle_click)
+        #self.canvas.bind("<B1-Motion>", self.handle_drag)
+        #self.canvas.bind("<ButtonRelease-1>", self.handle_release)
         self.data = data
         self.selectedCells = set()
         self.selectedTriplets = set()
@@ -732,9 +381,23 @@ class CustomTable(tk.Frame):
         self.selectionCoords = {"x":0, "y":0, "x2":0, "y2":0}
         self.selectionRect = []
         self.startingCell = []
-        self.draw_table()
+        self.cellStyle = cellStyle
+        self.draw_table(self.cellStyle)
 
-    def draw_table(self):
+    def configure_interaction_mode(self,
+                                   allowDrag=False,
+                                   onClick=None,
+                                   onDrag=None,
+                                   onRelease=None):
+        self.unbind_all_mouse_events()
+
+    
+    def unbind_all_mouse_events(self):
+        for eventType, bindID in self.bindings.items():
+            self.canvas.unbind(eventType, bindID)
+        self.bindings.clear()
+
+    def draw_table(self, styleResolver):
         self.canvas.delete("all")
 
         for (row, col), value in self.data.items():
@@ -742,17 +405,22 @@ class CustomTable(tk.Frame):
             y1 = row * self.cellHeight
             x2 = x1 + self.cellWidth
             y2 = y1 + self.cellHeight
-
-            self.canvas.create_rectangle(x1, y1, x2, y2, outline="black", width=1)
+            style = styleResolver.get_cell_style(row, col)
+            self.canvas.create_rectangle(x1, y1, x2, y2, 
+                                         outline=style.outline, 
+                                         fill=style.fill, 
+                                         width=style.width)
             if self.showData:
-                self.canvas.create_text(x1 + self.cellWidth/2, y1 + self.cellHeight/2, text=value)
-            
-            if (row, col) in self.selectedCells:
-                self.canvas.create_rectangle(x1, y1, x2, y2, outline="red", width=3)
-            
-            if (row) in self.assignedRows:
-                self.canvas.create_rectangle(x1, y1, x2, y2, outline="green", width=3)
+                self.canvas.create_text(x1 + self.cellWidth/2, 
+                                        y1 + self.cellHeight/2, 
+                                        text=value)
 
+    
+    def cell_from_click(self, event):
+        row = event.y // self.cellHeight
+        col = event.x // self.cellWidth
+        return row, col
+    '''
     def handle_click(self, event):
         self.selectionCoords["x"] = event.x
         self.selectionCoords["y"] = event.y
@@ -776,7 +444,7 @@ class CustomTable(tk.Frame):
                 if self.on_cell_selected:
                     self.on_cell_selected(row)
         self.draw_table()
-    
+    '''
     def handle_drag(self, event):
         previousX = self.selectionCoords["x2"]
         previousY = self.selectionCoords["y2"]
@@ -899,18 +567,516 @@ class CustomTable(tk.Frame):
                 self.selectedCells.add((row, i))
         self.draw_table()
 
-    def assign_rows(self):
+    def assign_rows(self, style):
         for row in self.selectedRows:
             self.assignedRows.add(row)
         self.selectedRows = set()
         self.selectedCells = set()
-        self.draw_table()
+        self.draw_table(style)
     
     def unassign_rows(self, rows):
         for row in rows:
             self.select_row(row)
             self.assignedRows.remove(row)
         self.draw_table()
+
+# allows for manual entry of triplicate data and concentrations
+class TriplicateGUI:
+    def __init__(self, main, plate):
+        self.selectedRows = set()
+        self.selectedTriplets = set()
+        self.assignedTriplets = set()
+        self.assignedRows = set()
+        self.selectionStrategy = RowSelector(self.selectedRows, self.assignedRows)
+        self.styleStrategy = HighlightAndLockSelection(self.selectedRows, 
+                                                       self.assignedRows, 
+                                                       self.selectionStrategy)
+        self.receptorByRow = 8*[None]
+        self.main = main
+        self.dataFrame = tk.Frame(self.main)
+        self.entryFrame = tk.Frame(self.main,
+                                   )
+        self.columns = ["1", "2", "3"]
+        self.receptorList = {}
+        self.plate = plate
+        plateData = plate.data.reset_index(drop=True)
+        self.dataDict = {}
+        self.drugDict = {}
+        self.concDict = {}
+        self.nameRequired = True
+        self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
+        for rowIdx, row in plateData.iterrows():
+            numCols = 4
+            for triplicate in range(0, numCols):
+                self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
+        self.table = CustomTable(self.dataFrame, 
+                                             self.originalData, 
+                                             showData=False, 
+                                             onCellSelected=self.update_selected_row,
+                                             cellStyle=self.styleStrategy)
+        self.table.canvas.bind("<Button-1>", self.handle_row_click)
+        self.table.pack(expand=True, fill='both')
+        self.receptorInfo = ttk.Treeview(self.dataFrame,
+                                         columns=("labels"),
+                                         height=1)
+        self.receptorInfo.heading("#0", text="Receptor Name")
+        self.receptorInfo.heading("labels", text="Row Labels")
+        self.receptorInfo.pack()
+        self.receptorEntry = tk.Entry(self.entryFrame)
+        self.receptorAddButton = tk.Button(self.entryFrame,
+                                           text="Assign receptor",
+                                           command = lambda: self.update_receptors(self.receptorEntry.get()))
+        self.receptorsConfirmButton = tk.Button(self.entryFrame,
+                                                text="Confirm layout",
+                                                command=self.assign_receptors,
+                                                state='disabled')
+        self.receptorRemoveButton = tk.Button(self.entryFrame, 
+                                              text="Remove receptor", 
+                                              command = self.remove_receptor)
+        self.selectAllRowsButton = tk.Button(self.entryFrame,
+                                             text="Select all rows",
+                                             command=self.select_all_rows)
+        self.receptorEntry.grid(row=0, column=0)
+        self.receptorAddButton.grid(row=1, column=0)
+        self.receptorsConfirmButton.grid(row=1, column=1)
+        self.receptorRemoveButton.grid(row=1, column=2)
+        self.selectAllRowsButton.grid(row=1, column=3)
+        self.receptorsAssigned = False
+        self.dataFrame.pack(fill="both", expand="yes")
+        self.entryFrame.pack(fill="both", expand="yes")
+    
+    def handle_row_click(self, event):
+        print("click happened")
+        row, col = self.table.cell_from_click(event)
+        self.selectionStrategy.on_click(row, col)
+        self.table.draw_table(self.styleStrategy)
+        print(row, col)
+
+    def handle_trip_click(self, event):
+        row, col = self.table.cell_from_click(event)
+        self.selectionStrategy.on_click(row, col)
+        self.select_triplicate((row, col // 3))
+        self.table.draw_table(self.styleStrategy)
+
+
+    def update_treeview(self):
+        rowCount = len(self.receptorInfo.get_children()) + 1
+        self.receptorInfo.config(height=rowCount)
+        
+    def update_receptors(self, receptorName):
+        if receptorName == "" or self.selectedRows == set():
+            return
+        self.receptorList[receptorName] = self.selectedRows
+        self.receptorEntry.delete(0, tk.END)
+        rowLetters = [chr(ord('A') + row) for row in self.selectedRows]
+        rowString = ', '.join(rowLetters)
+        for i in self.selectedRows:
+            self.assignedRows.add(i)
+            self.receptorByRow[i] = receptorName
+        self.update_treeview()
+        self.receptorInfo.insert("", 
+                                tk.END, 
+                                text=receptorName,
+                                values=[rowString])
+        self.selectedRows.clear()
+        print(f"Rows in triplicate gui selected after reset: {self.selectedRows}")
+        self.table.draw_table(self.styleStrategy)
+        self.ui_state()
+
+    def remove_receptor(self):
+        curItem = self.receptorInfo.focus()
+        itemContents = self.receptorInfo.item(curItem)
+        itemRows = itemContents["values"][0]
+        receptorName = itemContents["text"]
+        rowList = itemRows.split(', ')
+        self.receptorList.pop(receptorName)
+        for row in rowList:
+            rowIdx = ord(row) - ord('A')
+            self.assignedRows.remove(rowIdx)
+            self.table.unassign_rows([rowIdx])
+        self.receptorInfo.delete(curItem)
+        self.update_treeview()
+        self.ui_state()
+
+    def ui_state(self):
+        if len(self.assignedRows) == 8:
+            self.receptorsConfirmButton["state"] = "normal"
+            self.receptorAddButton["state"] = "disabled"
+            self.receptorEntry["state"] = "disabled"
+        else:
+            self.receptorsConfirmButton["state"] = "disabled"
+            self.receptorAddButton["state"] = "normal"
+            self.receptorEntry["state"] = "normal"
+
+    def unload_receptor_gui(self):
+        self.table.pack_forget()
+        self.receptorEntry.grid_forget()
+        self.receptorAddButton.grid_forget()
+        self.receptorRemoveButton.grid_forget()
+        self.receptorsConfirmButton.grid_forget()
+        self.selectAllRowsButton.grid_forget()
+
+    def assign_receptors(self):
+        self.selectionStrategy = TripletSelector(self.selectedTriplets, None)
+        self.styleStrategy = HighlightSelection(self.selectedTriplets, self.selectionStrategy)
+        self.unload_receptor_gui()
+        self.tree = ttk.Treeview(self.dataFrame, 
+                                 columns=self.columns, 
+                                 show="headings", 
+                                 height=1)
+        self.saveTree = ttk.Treeview(self.dataFrame,
+                                     columns=("conc"),
+                                     height=1)
+        self.saveTree.heading("#0", text="Drug Name")
+        self.saveTree.heading("conc", text="Concentration")
+        self.table = CustomTable(self.dataFrame, 
+                                       self.originalData, 
+                                       showData=False, 
+                                       cellStyle=self.styleStrategy)        
+        self.table.canvas.bind("<Button-1>", self.handle_trip_click)
+        self.table.pack(expand=True, fill='both')
+        for col in self.columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=120, anchor = "center")
+        self.tree.pack(expand=True, fill='both')
+        self.tree.pack_propagate(0)
+        self.saveTree.pack(expand=True, fill='both')
+        self.saveTree.pack_propagate(0)
+        self.concentrationVal = tk.IntVar()
+        self.radio1 = tk.Radiobutton(self.entryFrame,
+                                     text="100 nM",
+                                     variable=self.concentrationVal,
+                                     value = -7,
+                                     command = self.enable_entries)
+        self.radio2 = tk.Radiobutton(self.entryFrame,
+                                     text="10 μM",
+                                     variable=self.concentrationVal,
+                                     value = -5,
+                                     command = self.enable_entries)
+        self.radio3 = tk.Radiobutton(self.entryFrame,
+                                     text="Non-specific",
+                                     variable=self.concentrationVal,
+                                     value = 0,
+                                     command = self.disable_entries)
+        self.radio4 = tk.Radiobutton(self.entryFrame,
+                                     text="Totals",
+                                     variable=self.concentrationVal,
+                                     value=1,
+                                     command = self.disable_entries)
+        self.radio1.grid(row=0, column=0)
+        self.radio2.grid(row=0, column=1)
+        self.radio3.grid(row=0, column=2)
+        self.radio4.grid(row=0, column=3)
+        self.triplicateEntry = tk.Entry(self.entryFrame)
+        self.triplicateEntry.grid(row=1, column=1)
+        self.changeButton = tk.Button(self.entryFrame,
+                                      text="Save entries",
+                                      command=self.cycle_data)
+        self.changeButton.grid(row=2, column=1)
+        self.currentKey = (0, 0)
+        self.selectedTriplets.add(self.currentKey)
+        self.table.draw_table(self.styleStrategy)
+        self.select_triplicate(self.currentKey)
+        #self.table.update_triplet(self.currentKey)
+
+    def enable_entries(self):
+        self.nameRequired = True
+        self.triplicateEntry["state"] = "normal"
+
+    def disable_entries(self):
+        self.nameRequired = False
+        self.triplicateEntry["state"] = "disabled"
+
+    def cycle_data(self):
+        rowIdx = self.currentKey[0]
+        tripIdx = self.currentKey[1]
+        if not self.update_current_triplicate(rowIdx, tripIdx):
+            return
+        if tripIdx >= 3:
+            tripIdx = 0
+            rowIdx += 1
+        else:
+            tripIdx += 1
+        if rowIdx > 7:
+            rowIdx = 0
+        self.currentKey = (rowIdx, tripIdx)
+        self.selectedTriplets.clear()
+        self.selectedTriplets.add(self.currentKey)
+        self.select_triplicate(self.currentKey)
+        self.table.draw_table(self.styleStrategy)
+        #self.select_triplicate(self.currentKey)
+        #self.table.update_triplet(self.currentKey)
+        self.screening_calculation()
+        self.enable_entries()
+
+    def select_triplicate(self, key):
+        self.currentKey = key
+        tripData = self.dataDict[self.currentKey]
+        self.triplicateEntry.delete(0, tk.END)
+        self.concentrationVal.set(None)
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        for row in self.saveTree.get_children():
+            self.saveTree.delete(row)
+        self.tree.insert("", "end", values=tripData)
+        if self.currentKey in self.concDict and self.currentKey in self.drugDict:
+            self.saveTree.insert("", "end", 
+                                 text=self.drugDict[self.currentKey],
+                                 values=[self.concDict[self.currentKey]])
+
+    def update_current_triplicate(self, rowIdx, tripIdx):
+        if self.nameRequired:
+            drugName = self.triplicateEntry.get()
+        else:
+            drugName = "None"
+        if drugName == "":
+            print("Enter a drug name")
+            return 0
+        try:
+            concVal = self.concentrationVal.get()
+        except:
+            print("Select a concentration")
+            return 0
+        try:
+            concVal = self.concentrationVal.get()
+        except:
+            concVal = None
+        match(concVal):
+            case 0:
+                concVal = "Non Specific"
+            case 1:
+                concVal = "Totals"
+
+        self.drugDict[self.currentKey] = drugName
+        self.concDict[self.currentKey] = concVal
+        return 1
+
+    def update_selected_row(self, rowIdx):
+        if rowIdx in self.assignedRows:
+            return
+        if rowIdx in self.selectedRows:
+            self.selectedRows.remove((rowIdx))
+        else:
+            self.selectedRows.add((rowIdx))
+
+    def select_all_rows(self):
+        previouslySelected = set()
+        for row in self.selectedRows:
+            previouslySelected.add(row)
+        self.selectedRows.clear()
+        for row in range(0, 8):
+            if row in self.assignedRows:
+                continue
+            self.selectedRows.add((row))
+            if row in previouslySelected:
+                continue
+        self.table.draw_table(self.styleStrategy)
+            #self.table.select_row(row)
+
+    def screening_calculation(self):
+        if not all(x in self.drugDict for x in self.dataDict):
+            #return
+            a = 1
+        results = {}
+        averages = {}
+        sem = {}
+        nonSpecific = {receptor: [] for receptor in self.receptorList}
+        totals = {receptor: [] for receptor in self.receptorList}
+        for key, drugName in self.drugDict.items():
+            conc = self.concDict[key]
+            data = self.dataDict[key]
+            receptor = self.receptorByRow[key[0]]
+            if receptor not in results:
+                results[receptor] = {}
+                averages[receptor] = {}
+                sem[receptor] = {}
+            if drugName not in results[receptor]:
+                results[receptor][drugName] = {}
+                averages[receptor][drugName] = {}
+                sem[receptor][drugName] = {}
+            if conc not in results[receptor][drugName]:
+                results[receptor][drugName][conc] = []
+            results[receptor][drugName][conc].append([val for val in data])
+        for receptor, drugs in results.items():
+            for drugName, concentrations in drugs.items():
+                if drugName == "None":
+                    nonSpecific[receptor] = np.mean(concentrations["Non Specific"])
+                    totals[receptor] = np.mean(concentrations["Totals"])
+                    continue
+                for conc, values in concentrations.items():
+                    averages[receptor][drugName][conc] = np.mean(values)
+                    sem[receptor][drugName][conc] = np.std(values)/np.sqrt(len(values))
+
+        print(nonSpecific)
+        print(totals)
+        print(results)
+        print(averages)
+        print(sem)
+
+# guitools for displaying and manipulating new and saved WellData        
+class WellDataGUI:
+    def __init__(self, main, plate):
+        self.main = main
+        self.dataFrame = tk.Frame(self.main)
+        self.entryFrame = tk.Frame(self.main)
+        self.plate = plate
+        plateData = plate.data.reset_index(drop=True)
+        dataDict = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
+        #dataDict = plate.data.to_dict(orient='index')
+        #dataDict = {rowKey: {str(colKey): value for colKey, value in colValues.items()} for rowKey, colValues in dataDict.items()}
+        #self.model = TableModel()
+        #self.model.importDict(dataDict)
+        #self.frame.grid(row=0, column=0, columnspan=4, sticky="N, E, W")
+        self.dataFrame.pack(fill="both", expand="yes")
+        self.entryFrame.pack(fill="both", expand="yes")
+        self.table = CustomTable(self.dataFrame, dataDict)
+        self.table.pack(fill=tk.BOTH, expand=True)
+        #self.table = TableCanvas(self.dataFrame, model=self.model, read_only=True)
+        #self.table.show()
+        self.main.after(100, self.adjust_window_width)
+        self.drugLabels = ["Drug 1: ", "Drug 2: ", "Drug 3: ", "Drug 4: "]
+        self.drugEntries = []
+        self.concentrationLabels = ["Highest concentration 1: ", "Highest concentration 2: ", "Highest concentration 3: ", "Highest concentration 4: "]
+        self.concentrationEntries = []
+        receptorLabel = ttk.Label(self.entryFrame, text="Receptor name: ")
+        receptorLabel.grid(row=5, column=0, sticky="E")
+        self.receptorName = ttk.Entry(self.entryFrame)
+        self.receptorName.grid(row=5, column=1, sticky="W")
+        makeReportButton = ttk.Button(self.entryFrame, text="Make new drug reports", command=self.make_drug_reports)
+        makeReportButton.grid(row=7, column=1, columnspan=2)
+        self.h5Path = io.get_default_h5_path()
+        self.recentComment = tk.StringVar(self.entryFrame)
+        addCommentButton = ttk.Button(self.entryFrame, 
+                                  text="Add comment", 
+                                  command=lambda: self.add_comment(self.recentComment.get()))
+        self.recentCommentField = ttk.Entry(self.entryFrame, textvariable=self.recentComment)
+        addCommentButton.grid(row=6, column=1)
+        self.recentCommentField.grid(row=6, column=2)
+
+        for i, labelText in enumerate(self.drugLabels):
+            drugEntry = self.create_drug_entry(self.entryFrame, labelText, i + 1, 1)
+            self.drugEntries.append(drugEntry)
+
+        for i, labelText in enumerate(self.concentrationLabels):
+            concEntry = self.create_drug_entry(self.entryFrame, labelText, i + 1, 2)
+            self.concentrationEntries.append(concEntry)
+
+    def adjust_window_width(self):
+        numCols = 12
+        numRows = 8
+        colWidth = self.table.cellWidth
+        totalWidth = numCols * colWidth
+        colHeight = self.table.cellHeight
+        totalHeight = numRows * colHeight
+        self.dataFrame.height = totalHeight
+        self.main.geometry(f"{totalWidth}x500")
+
+    def add_comment(self, comment):
+        print("comment added")
+        self.plate.add_comment(comment)
+        self.plate.display()
+        self.recentCommentField.delete(0, 'end')
+
+    def create_drug_entry(self, parent, labelText, row, entryNo):
+        entryVar = tk.StringVar()
+        label = ttk.Label(parent, text=labelText)
+        label.grid(row=row, column=(entryNo*2)-2, padx=5, pady=5, sticky="E")
+        entry = ttk.Entry(parent, textvariable=entryVar)
+        entry.grid(row=row, column=(entryNo*2)-1, padx=5, pady=5, sticky="W")
+        return entryVar
+
+    def make_drug_reports(self):
+        self.validate_user_input()
+        self.update_plate()
+        reports = self.plate.make_all_drug_reports()
+        for report in reports:
+            io.save_new_DrugReport(report, self.h5Path)
+        print(f"Reports saved to {self.h5Path}")
+        self.main.destroy()
+        self.main.update()
+    
+    def validate_user_input(self):
+        floatReg ="\d+\.\d+|(?<=angle\s)\d+"    # cursed regular expression to validate float or int
+        for entry in self.concentrationEntries:
+            try: 
+                float(entry.get())
+            except ValueError:
+                raise TypeError('bad datatype for concentration: enter int or float')
+            
+    def update_plate(self):
+        for i, entry in enumerate(self.drugEntries):
+            self.plate.update_conc(float(self.concentrationEntries[i].get()), i)
+            self.plate.update_drugs(entry.get(), i) 
+        self.plate.update_receptor(self.receptorName.get())
+
+# gui class for displaying saved DrugReports from h5
+class DrugReportsGUI:
+    def __init__(self, main):
+        self.main = main
+        self.main.geometry("600x300")
+        self.h5Path = io.get_default_h5_path()
+        self.h5File = h5py.File(self.h5Path, "r")
+        self.drugs = list(self.h5File["reports"].keys())
+        self.dataset = {drug: self.h5File["reports"][drug] for drug in self.drugs}
+        self.drugLabel = tk.Label(self.main, text="Select a drug: ")
+        self.drugLabel.grid(row=0, column=0, sticky="NEW")
+        self.drugSelected = tk.StringVar()
+        self.drugDrop = ttk.Combobox(self.main, textvariable=self.drugSelected, values=self.drugs)
+        self.drugDrop.grid(row=0, column=1, sticky="NW")
+        self.receptorLabel = tk.Label(self.main, text="Select a receptor: ")
+        self.receptorLabel.grid(row=1, column=0, sticky="NEW")
+        self.receptorClicked = tk.StringVar()
+        self.receptorDrop = ttk.Combobox(self.main, textvariable=self.receptorClicked)
+        self.receptorDrop.grid(row=1, column=1, sticky="NW")
+        self.dateLabel = tk.Label(self.main, text="Select an assay date: ")
+        self.dateLabel.grid(row=2, column=0, sticky="NEW")
+        self.dateSelected = tk.StringVar()
+        self.dateDrop = ttk.Combobox(self.main, textvariable=self.dateSelected)
+        self.dateDrop.grid(row=2, column=1, sticky="NW")
+        self.drugDrop.bind("<<ComboboxSelected>>", lambda event: self.update_receptors(event))
+        self.receptorDrop.bind("<<ComboboxSelected>>", lambda event: self.update_dates(event))
+        self.dateDrop.bind("<<ComboboxSelected>>", lambda event: self.update_DrugReports_GUI(event))
+        self.columns = ["Average", "Specific", "[Drug]", "Log [Drug]", "Pct Total"]
+        self.tree = ttk.Treeview(self.main, columns=self.columns, show="headings")
+        for col in self.columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=120, anchor="center")
+        self.tree.grid(row=3, column=0, columnspan=3, sticky="E, W")
+        self.main.grid_columnconfigure(0, weight=1)
+
+    def update_receptors(self, event):
+        self.selectedDrug = self.drugDrop.get()
+        if self.selectedDrug:
+            receptorKeys = list(self.dataset[self.selectedDrug].keys())
+            self.receptorDrop['values'] = receptorKeys
+            self.receptorDrop.set('')
+        else:
+            print("No drug selected.")
+
+    def update_dates(self, event):
+        self.selectedReceptor = self.receptorDrop.get()
+        if self.selectedReceptor:
+            dateKeys = list(self.dataset[self.selectedDrug][self.selectedReceptor].keys())
+            self.dateDrop['values'] = dateKeys
+            self.dateDrop.set('')
+        else:
+            print("No date selected")
+    
+    def update_DrugReports_GUI(self, event):
+        selectedDate = self.dateDrop.get()
+        currentDrugReport = io.load_h5_DrugReports(self.selectedDrug, self.selectedReceptor, selectedDate, self.h5Path)
+
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+
+        for i in range(len(currentDrugReport.average)):
+            self.tree.insert("", "end", values=(
+                currentDrugReport.average[i],
+                currentDrugReport.specific[i],
+                currentDrugReport.concentration[i],
+                currentDrugReport.logConc[i],
+                currentDrugReport.pctTotal[i]
+            ))
 
 # used to create excel templates for nida/dea assays
 class TemplateGUI:
