@@ -245,14 +245,38 @@ class SelectionStrategy(ABC):
     
 # select the cell that was clicked
 class SingleCellSelector(SelectionStrategy):
+    def __init__(self, selectedCell, lockedCells):
+        self.selectedCell = selectedCell
+        self.lockedCells = lockedCells
+
+    def on_click(self, row, col):
+        if (row, col) in self.lockedCells:
+            return
+        if (row, col) == self.selectedCell:
+            self.selectedCell.clear()
+        else:
+            self.selectedCell.clear()
+            self.selectedCell.add((row, col))
+
+    def get_selected_cells(self):
+        return self.selectedCell
+
+
+class MultiCellSelector(SelectionStrategy):
     def __init__(self, selectedCells, lockedCells):
         self.selectedCells = selectedCells
         self.lockedCells = lockedCells
 
     def on_click(self, row, col):
-        if (row, col) not in self.lockedCells:
-            self.selectedCells.clear()
+        if (row, col) in self.lockedCells:
+            return
+        if (row, col) in self.selectedCells:
+            self.selectedCells.remove((row, col))
+        else:
             self.selectedCells.add((row, col))
+
+    def get_selected_cells(self):
+        return self.selectedCells
 
 # select the triplet containing the cell that was clicked
 class TripletSelector(SelectionStrategy):
@@ -304,7 +328,7 @@ class CellStyle:
     outline: str = "black"
     text: str = ""
     font: str = "TkDefaultFont"
-    width: int = 1
+    width: int = 2
 
 class CellStyleResolver(ABC):
     @abstractmethod
@@ -331,12 +355,12 @@ class HighlightAndLockSelection(CellStyleResolver):
         self.strategy = selectionStrategy
 
     def get_cell_style(self, row, col):
-        parentSelection = self.strategy.get_selected_cells()
-        parentLock = self.strategy.get_locked_cells()
+        parentSelection = self.strategy.get_selected_cells() or {}
+        parentLock = self.strategy.get_locked_cells() or {}
         if (row, col) in parentSelection:
-            return CellStyle(fill="white", outline="red", width=3)
+            return CellStyle(fill="firebrick1", outline="black", width=2)
         elif (row, col) in parentLock:
-            return CellStyle(fill="gold", outline="green", width=3)
+            return CellStyle(fill="gold", outline="green", width=2)
         else:
             return CellStyle
         
@@ -346,14 +370,9 @@ class CustomTable(tk.Frame):
                  parent, 
                  data, 
                  showData=True, 
-                 onCellSelected=None, 
-                 selectionType="cell", 
-                 selectMulti=True,
                  cellStyle: CellStyleResolver=None):
         
         super().__init__(parent)
-        self.on_cell_selected = onCellSelected
-        self.highlightType = selectionType
         self.showData = showData
         if self.showData:
             self.cellWidth = 60
@@ -369,33 +388,9 @@ class CustomTable(tk.Frame):
                                 width=self.cellWidth*12)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.bindings = {}
-        #self.canvas.bind("<Button-1>", self.handle_click)
-        #self.canvas.bind("<B1-Motion>", self.handle_drag)
-        #self.canvas.bind("<ButtonRelease-1>", self.handle_release)
         self.data = data
-        self.selectedCells = set()
-        self.selectedTriplets = set()
-        self.selectedRows = set()
-        self.assignedRows = set()
-        self.multiSelect = selectMulti
-        self.selectionCoords = {"x":0, "y":0, "x2":0, "y2":0}
-        self.selectionRect = []
-        self.startingCell = []
         self.cellStyle = cellStyle
         self.draw_table(self.cellStyle)
-
-    def configure_interaction_mode(self,
-                                   allowDrag=False,
-                                   onClick=None,
-                                   onDrag=None,
-                                   onRelease=None):
-        self.unbind_all_mouse_events()
-
-    
-    def unbind_all_mouse_events(self):
-        for eventType, bindID in self.bindings.items():
-            self.canvas.unbind(eventType, bindID)
-        self.bindings.clear()
 
     def draw_table(self, styleResolver):
         self.canvas.delete("all")
@@ -415,171 +410,11 @@ class CustomTable(tk.Frame):
                                         y1 + self.cellHeight/2, 
                                         text=value)
 
-    
     def cell_from_click(self, event):
         row = event.y // self.cellHeight
         col = event.x // self.cellWidth
         return row, col
-    '''
-    def handle_click(self, event):
-        self.selectionCoords["x"] = event.x
-        self.selectionCoords["y"] = event.y
-        row, col = self.cell_coordinates(event)
-        self.startingCell = (row, col)
-        match self.highlightType:
-            case "cell":
-                if (row, col) in self.selectedCells:
-                    self.selectedCells.remove((row, col))
-                else:
-                    self.selectedCells.add((row, col))
-                if self.on_cell_selected:
-                    self.on_cell_selected(row, col)
-            case "triplet":
-                tripIdx = col // 3
-                self.update_triplet((row, tripIdx))
-                if self.on_cell_selected:
-                    self.on_cell_selected((row, tripIdx))    
-            case "row":
-                self.select_row(event) # here for debugging
-                if self.on_cell_selected:
-                    self.on_cell_selected(row)
-        self.draw_table()
-    '''
-    def handle_drag(self, event):
-        previousX = self.selectionCoords["x2"]
-        previousY = self.selectionCoords["y2"]
-        self.selectionCoords["x2"] = event.x
-        self.selectionCoords["y2"] = event.y
-        event.x = previousX
-        event.y = previousY
-        self.canvas.delete(self.selectionRect)
-
-        self.selectionRect = self.canvas.create_rectangle(
-            self.selectionCoords["x"],
-            self.selectionCoords["y"],
-            self.selectionCoords["x2"],
-            self.selectionCoords["y2"])
-
-    def handle_release(self, event):
-        currentCell = self.cell_coordinates(event)
-        if currentCell != self.startingCell:
-            startRow = min(self.startingCell[0], currentCell[0])
-            endRow = max(self.startingCell[0], currentCell[0])
-            startCol = min(self.startingCell[1], currentCell[1])
-            endCol = max(self.startingCell[1], currentCell[1])
-            print(range(self.startingCell[0], currentCell[0]))
-            for row in range(startRow, endRow + 1):
-                for col in range(startCol, endCol + 1):
-                    self.select_cell(None, row, col)
-
-    def cell_coordinates(self, event):
-        row = event.y // self.cellHeight
-        col = event.x // self.cellWidth
-        return row, col
-
-    def select_cell(self, event, row=None, col=None):
-        print(row, col)
-        if row == None or col == None:
-            row, col = self.cell_coordinates(event)
-        if (row, col) not in self.data:
-            return
-        if (row, col) in self.selectedCells:
-            self.deselect_cell(row, col)
-            return
-        self.check_reset()
-        self.selectedCells.add((row, col))
-        self.draw_table()
-
-    def deselect_cell(self, row, col):
-        if (row, col) in self.selectedCells:
-            self.selectedCells.remove((row, col))
-        self.draw_table()
-
-    def select_triplet(self, event):
-        row, col = self.cell_coordinates(event)
-        triplet = col // 3
-        if (row, triplet) in self.selectedTriplets:
-            self.deselect_triplet(row, triplet)
-            return
-        self.check_reset()
-        for col in range(triplet, triplet + 3):
-            self.selectedCells.add((row, col))
-        self.selectedTriplets.add((row, triplet))
-        self.draw_table()
-
-    def deselect_triplet(self, row, triplet):
-        for col in range(triplet, triplet + 3):
-            if (row, col) in self.selectedCells:
-                self.selectedCells.remove((row, col))
-        self.selectedTriplets.remove((row, triplet))
-        self.draw_table()
-
-    def select_row(self, event):
-        if type(event) == int:
-            row = event
-        else:
-            row, col = self.cell_coordinates(event)
-        if row in self.assignedRows:
-            return
-        if row in self.selectedRows:
-            self.deselect_row(row)
-            return
-        self.check_reset()
-        for col in range(0, 12):
-            self.selectedCells.add((row, col))
-        self.selectedRows.add((row))
-        self.draw_table()
-        
-    def deselect_row(self, row):
-        for col in range(0, 12):
-            if (row, col) in self.selectedCells:
-                self.selectedCells.remove((row, col))
-        self.selectedRows.remove((row))
-        self.draw_table()
-
-    def toggle_multi(self):
-        self.multiSelect = not self.multiSelect
-
-    def check_reset(self):
-        if not self.multiSelect:
-            self.reset_selections()
-
-    def reset_selections(self):
-        self.selectedCells = set()
-        self.selectedTriplets = set()
-        self.selectedRows = set()
-
-    def update_triplet(self, tripIdx):
-        tupleList = []
-        for i in range(0, 3):
-            tupleList.append(tuple(map(sum, zip(tripIdx, (0, tripIdx[1] * 3 + i - tripIdx[1])))))
-        self.check_reset()
-        for tup in tupleList:
-            self.selectedCells.add(tup)
-        self.draw_table()
-
-    def update_row(self, row):
-        tupleList = []
-        for i in range(0, 12):
-            if (row, i) in self.selectedCells:
-                self.selectedCells.remove((row, i))
-            else:
-                self.selectedCells.add((row, i))
-        self.draw_table()
-
-    def assign_rows(self, style):
-        for row in self.selectedRows:
-            self.assignedRows.add(row)
-        self.selectedRows = set()
-        self.selectedCells = set()
-        self.draw_table(style)
     
-    def unassign_rows(self, rows):
-        for row in rows:
-            self.select_row(row)
-            self.assignedRows.remove(row)
-        self.draw_table()
-
 # allows for manual entry of triplicate data and concentrations
 class TriplicateGUI:
     def __init__(self, main, plate):
@@ -612,7 +447,6 @@ class TriplicateGUI:
         self.table = CustomTable(self.dataFrame, 
                                              self.originalData, 
                                              showData=False, 
-                                             onCellSelected=self.update_selected_row,
                                              cellStyle=self.styleStrategy)
         self.table.canvas.bind("<Button-1>", self.handle_row_click)
         self.table.pack(expand=True, fill='both')
@@ -644,7 +478,7 @@ class TriplicateGUI:
         self.receptorsAssigned = False
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
-    
+     
     def handle_row_click(self, event):
         print("click happened")
         row, col = self.table.cell_from_click(event)
@@ -657,7 +491,6 @@ class TriplicateGUI:
         self.selectionStrategy.on_click(row, col)
         self.select_triplicate((row, col // 3))
         self.table.draw_table(self.styleStrategy)
-
 
     def update_treeview(self):
         rowCount = len(self.receptorInfo.get_children()) + 1
@@ -851,13 +684,6 @@ class TriplicateGUI:
         self.concDict[self.currentKey] = concVal
         return 1
 
-    def update_selected_row(self, rowIdx):
-        if rowIdx in self.assignedRows:
-            return
-        if rowIdx in self.selectedRows:
-            self.selectedRows.remove((rowIdx))
-        else:
-            self.selectedRows.add((rowIdx))
 
     def select_all_rows(self):
         previouslySelected = set()
@@ -927,10 +753,25 @@ class WellDataGUI:
         #self.model = TableModel()
         #self.model.importDict(dataDict)
         #self.frame.grid(row=0, column=0, columnspan=4, sticky="N, E, W")
+
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
-        self.table = CustomTable(self.dataFrame, dataDict)
-        self.table.pack(fill=tk.BOTH, expand=True)
+        self.selectedCells = set()
+        self.assignedCells = set()
+        self.selectionStrategy = MultiCellSelector(self.selectedCells, self.assignedCells)
+        self.styleStrategy = HighlightAndLockSelection(self.selectedCells, 
+                                                       self.assignedCells, 
+                                                       self.selectionStrategy)
+        self.table = CustomTable(self.dataFrame, 
+                                             dataDict, 
+                                             showData=True, 
+                                             cellStyle=self.styleStrategy)
+        self.table.canvas.bind("<Button-1>", self.handle_click)
+        self.table.pack(expand=True, fill='both')
+
+
+
+
         #self.table = TableCanvas(self.dataFrame, model=self.model, read_only=True)
         #self.table.show()
         self.main.after(100, self.adjust_window_width)
@@ -970,6 +811,11 @@ class WellDataGUI:
         totalHeight = numRows * colHeight
         self.dataFrame.height = totalHeight
         self.main.geometry(f"{totalWidth}x500")
+
+    def handle_click(self, event):
+        row, col = self.table.cell_from_click(event)
+        self.selectionStrategy.on_click(row, col)
+        self.table.draw_table(self.styleStrategy)
 
     def add_comment(self, comment):
         print("comment added")
