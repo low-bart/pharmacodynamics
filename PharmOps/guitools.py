@@ -109,10 +109,6 @@ class BindingGUI:
             WellDataGUI(newWindow, plate)
             self.main.wait_window(newWindow)
 
-    # will load and display WellData from h5 file
-    def load_WellData(self):
-        pass
-
     # loads new waitwindow making user pick count plate, radioligand concentration, and multiplication factor
     def choose_count_plate(self, numCountPlates):
         plateSelectWindow = tk.Toplevel(self.main)
@@ -189,6 +185,10 @@ class BindingGUI:
             selectedPlateInt = 0
         return selectedPlateInt, multiplicationFactor.get()
 
+    # will load and display WellData from h5 file
+    def load_WellData(self):
+        pass
+
     # loads and displays DrugReports from DrugReportsGUI
     def load_DrugReports(self):
         newWindow = tk.Toplevel(self.main)
@@ -211,7 +211,6 @@ class BindingGUI:
         self.main.wait_window(newWindow)
 
     def parse_triplicates(self):
-        
         fileName = filedialog.askopenfilename(
             initialdir="~", 
             title='Select a file', 
@@ -228,7 +227,7 @@ class BindingGUI:
 # abstract base class to inherit modes of cell selection from
 class SelectionStrategy(ABC):
     @abstractmethod
-    def on_click(self, row, col, event, currentSelection):
+    def on_click(self, row, col):
         pass
 
     def on_drag(self, row, col, event, currentSelection):
@@ -243,7 +242,7 @@ class SelectionStrategy(ABC):
     def get_locked_cells(self):
         return {}
     
-# select the cell that was clicked
+# select/deselect the cell that was clicked
 class SingleCellSelector(SelectionStrategy):
     def __init__(self, selectedCell, lockedCells):
         self.selectedCell = selectedCell
@@ -261,7 +260,7 @@ class SingleCellSelector(SelectionStrategy):
     def get_selected_cells(self):
         return self.selectedCell
 
-
+# allow multiple cells to be selected at once
 class MultiCellSelector(SelectionStrategy):
     def __init__(self, selectedCells, lockedCells):
         self.selectedCells = selectedCells
@@ -278,7 +277,7 @@ class MultiCellSelector(SelectionStrategy):
     def get_selected_cells(self):
         return self.selectedCells
 
-# select the triplet containing the cell that was clicked
+# select/deselect the triplet containing the cell that was clicked
 class TripletSelector(SelectionStrategy):
     def __init__(self, selectedTriplets, lockedTriplets):
         self.selectedTriplets = selectedTriplets
@@ -286,7 +285,6 @@ class TripletSelector(SelectionStrategy):
 
     def on_click(self, row, col):
         triplet = col // 3
-        print(f"{row, triplet} printed from selectionStrat")
         if (row, triplet) in self.selectedTriplets:
             self.selectedTriplets.remove((row, triplet))
             return
@@ -304,6 +302,8 @@ class RowSelector(SelectionStrategy):
         self.lockedRows = lockedRows
 
     def on_click(self, row, col):
+        if col not in range(0, 12):
+            return
         if row in self.lockedRows:
             return
         if row in self.selectedRows:
@@ -344,7 +344,7 @@ class HighlightSelection(CellStyleResolver):
     def get_cell_style(self, row, col):
         parentSelection = self.strategy.get_selected_cells()
         if (row, col) in parentSelection:
-            return CellStyle(fill="white", outline="red", width=3)
+            return CellStyle(fill="firebrick1", outline="black", width=2)
         else:
             return CellStyle
         
@@ -360,7 +360,7 @@ class HighlightAndLockSelection(CellStyleResolver):
         if (row, col) in parentSelection:
             return CellStyle(fill="firebrick1", outline="black", width=2)
         elif (row, col) in parentLock:
-            return CellStyle(fill="gold", outline="green", width=2)
+            return CellStyle(fill="dodger blue", outline="black", width=2)
         else:
             return CellStyle
         
@@ -479,23 +479,25 @@ class TriplicateGUI:
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
      
+    # bound to mouse 1 when selecting rows for receptors
     def handle_row_click(self, event):
-        print("click happened")
         row, col = self.table.cell_from_click(event)
         self.selectionStrategy.on_click(row, col)
         self.table.draw_table(self.styleStrategy)
-        print(row, col)
 
+    # bound to mouse 1 when selecting triplicates
     def handle_trip_click(self, event):
         row, col = self.table.cell_from_click(event)
         self.selectionStrategy.on_click(row, col)
         self.select_triplicate((row, col // 3))
         self.table.draw_table(self.styleStrategy)
 
+    # adjust height of receptor Treeview when changed
     def update_treeview(self):
         rowCount = len(self.receptorInfo.get_children()) + 1
         self.receptorInfo.config(height=rowCount)
         
+    # assign new rows to a receptor and lock them
     def update_receptors(self, receptorName):
         if receptorName == "" or self.selectedRows == set():
             return
@@ -516,6 +518,7 @@ class TriplicateGUI:
         self.table.draw_table(self.styleStrategy)
         self.ui_state()
 
+    # remove a receptor assignment and unlock the rows
     def remove_receptor(self):
         curItem = self.receptorInfo.focus()
         itemContents = self.receptorInfo.item(curItem)
@@ -531,6 +534,7 @@ class TriplicateGUI:
         self.update_treeview()
         self.ui_state()
 
+    # allow confirm when all rows are assigned
     def ui_state(self):
         if len(self.assignedRows) == 8:
             self.receptorsConfirmButton["state"] = "normal"
@@ -541,6 +545,7 @@ class TriplicateGUI:
             self.receptorAddButton["state"] = "normal"
             self.receptorEntry["state"] = "normal"
 
+    # remove receptor related gui items, leaving only the Treeview
     def unload_receptor_gui(self):
         self.table.pack_forget()
         self.receptorEntry.grid_forget()
@@ -549,6 +554,7 @@ class TriplicateGUI:
         self.receptorsConfirmButton.grid_forget()
         self.selectAllRowsButton.grid_forget()
 
+    # confirm receptor assignment and proceed to triplicate
     def assign_receptors(self):
         self.selectionStrategy = TripletSelector(self.selectedTriplets, None)
         self.styleStrategy = HighlightSelection(self.selectedTriplets, self.selectionStrategy)
@@ -612,14 +618,17 @@ class TriplicateGUI:
         self.select_triplicate(self.currentKey)
         #self.table.update_triplet(self.currentKey)
 
+    # used if there is a concentration of drug
     def enable_entries(self):
         self.nameRequired = True
         self.triplicateEntry["state"] = "normal"
 
+    # used for totals and non-specific
     def disable_entries(self):
         self.nameRequired = False
         self.triplicateEntry["state"] = "disabled"
 
+    # adds entered information to table and selects next triplicate
     def cycle_data(self):
         rowIdx = self.currentKey[0]
         tripIdx = self.currentKey[1]
@@ -637,11 +646,10 @@ class TriplicateGUI:
         self.selectedTriplets.add(self.currentKey)
         self.select_triplicate(self.currentKey)
         self.table.draw_table(self.styleStrategy)
-        #self.select_triplicate(self.currentKey)
-        #self.table.update_triplet(self.currentKey)
         self.screening_calculation()
         self.enable_entries()
 
+    # fetch data for triplet and show in Treeview
     def select_triplicate(self, key):
         self.currentKey = key
         tripData = self.dataDict[self.currentKey]
@@ -657,6 +665,7 @@ class TriplicateGUI:
                                  text=self.drugDict[self.currentKey],
                                  values=[self.concDict[self.currentKey]])
 
+    # confirmation of proper field entries in cycle_data
     def update_current_triplicate(self, rowIdx, tripIdx):
         if self.nameRequired:
             drugName = self.triplicateEntry.get()
@@ -684,7 +693,7 @@ class TriplicateGUI:
         self.concDict[self.currentKey] = concVal
         return 1
 
-
+    # for ease of assigning a whole plate to a receptor
     def select_all_rows(self):
         previouslySelected = set()
         for row in self.selectedRows:
@@ -697,8 +706,9 @@ class TriplicateGUI:
             if row in previouslySelected:
                 continue
         self.table.draw_table(self.styleStrategy)
-            #self.table.select_row(row)
 
+    # deprecated but right idea - logic needs to move to h5/json/external storage
+    # need a good way to divide experiments by identifiers
     def screening_calculation(self):
         if not all(x in self.drugDict for x in self.dataDict):
             #return

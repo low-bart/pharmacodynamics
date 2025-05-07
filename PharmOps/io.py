@@ -81,10 +81,14 @@ def convert_date_string(dateStr):
     parsedDate = parsedDate.strftime("%Y%m%d")
     return parsedDate
 
+def prepare_binary(obj):
+    serializedObj = pickle.dumps(obj)
+    serializedArray = np.frombuffer(serializedObj, dtype='uint8')
+    return serializedArray
+
 # save WellData obj to h5
 def save_new_WellData(wellData, filepath):
-    serializedObj = pickle.dumps(wellData)
-    serializedArray = np.frombuffer(serializedObj, dtype='uint8')
+    serializedArray = prepare_binary(wellData)
     parsedDate = convert_date_string(wellData.metadata.date)
     plateNo = wellData.metadata.plate
     with h5py.File(filepath, "a") as h5file:
@@ -94,8 +98,7 @@ def save_new_WellData(wellData, filepath):
 
 # save DrugReports obj to h5
 def save_new_DrugReport(drugRep, filepath):
-    serializedObj = pickle.dumps(drugRep)
-    serializedArray = np.frombuffer(serializedObj, dtype='uint8')
+    serializedArray = prepare_binary(drugRep)
     drugName = drugRep.drug
     receptorName = drugRep.metadata.receptor
     parsedDate = convert_date_string(drugRep.metadata.date)
@@ -103,6 +106,10 @@ def save_new_DrugReport(drugRep, filepath):
         group = h5file.require_group("reports/" + drugName + "/" + receptorName)
         grp = group.create_dataset(parsedDate, data=serializedArray)
         group.attrs["version"] = version("PharmOps")
+
+def save_new_triplicate_assay(triplet, filepath):
+    serializedArray = prepare_binary(triplet)
+    
 
 # load existing DrugReports from h5 via unserializing 
 def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
