@@ -227,7 +227,7 @@ class BindingGUI:
 # abstract base class to inherit modes of cell selection from
 class SelectionStrategy(ABC):
     @abstractmethod
-    def on_click(self, row, col):
+    def on_click(self, row, col, event):
         pass
 
     def on_drag(self, row, col, event, currentSelection):
@@ -282,14 +282,29 @@ class TripletSelector(SelectionStrategy):
     def __init__(self, selectedTriplets, lockedTriplets):
         self.selectedTriplets = selectedTriplets
         self.lockedTriplets = lockedTriplets
+        self.clickX = None
+        self.clickY = None
+        self.rowClicked = None
+        self.colClicked = None
 
-    def on_click(self, row, col):
+    def on_click(self, row, col, event):
+        self.clickX = event.x
+        self.clickY = event.y
+        self.rowClicked = row
+        self.colClicked = col
         triplet = col // 3
         if (row, triplet) in self.selectedTriplets:
             self.selectedTriplets.remove((row, triplet))
             return
         self.selectedTriplets.clear()
         self.selectedTriplets.add((row, triplet))
+    
+    def on_drag(self, row, col, event):
+        latestX = event.x
+        latestY = event.y
+        if (row, col) == (self.rowClicked, self.colClicked):
+            return []
+        return([self.clickX, self.clickY, latestX, latestY])
 
     def get_selected_cells(self):
         return{(row, col) 
@@ -300,18 +315,31 @@ class RowSelector(SelectionStrategy):
     def __init__(self, selectedRows, lockedRows):
         self.selectedRows = selectedRows
         self.lockedRows = lockedRows
+        self.clickX = None
+        self.clickY = None
+        self.rowClicked = None
+        self.colClicked = None
 
-    def on_click(self, row, col):
+    def on_click(self, row, col, event):
         if col not in range(0, 12):
             return
         if row in self.lockedRows:
             return
+        self.clickX = event.x
+        self.clickY = event.y
+        self.rowClicked = row
+        self.colClicked = col
         if row in self.selectedRows:
             self.selectedRows.remove(row)
             return
         #self.selectedRows.clear() #commented out while i figure out how to divide multiselect
         self.selectedRows.add(row)
 
+    def on_drag(self, row, col, event):
+        latestX = event.x
+        latestY = event.y
+        return([self.clickX, self.clickY, latestX, latestY])
+    
     def get_selected_cells(self):
         return {(row, col)
                 for row in self.selectedRows
@@ -391,10 +419,28 @@ class CustomTable(tk.Frame):
         self.data = data
         self.cellStyle = cellStyle
         self.draw_table(self.cellStyle)
+    
+    # controls bindings via passing SelectionStrategy methods in
+    def configure_interaction_mode(self, allowDrag = False, 
+                                   on_click=None, 
+                                   on_drag=None, 
+                                   on_release=None):
+        self.unbind_all_mouse_events()
+        if on_click:
+            self.bindings["<Button-1>"] = self.canvas.bind("<Button-1>", on_click)
+        if allowDrag and on_drag:
+            self.bindings["<B1-Motion>"] = self.canvas.bind("<B1-Motion>", on_drag)
+        if allowDrag and on_release:
+            self.bindings["<ButtonRelease-1>"] = self.canvas.bind("<ButtonRelease-1>", on_release)
 
+    def unbind_all_mouse_events(self):
+        for eventType, bindID in self.bindings.items():
+            self.canvas.unbind(eventType, bindID)
+        self.bindings.clear()
+
+    # updates table according to style and selection strategy
     def draw_table(self, styleResolver):
         self.canvas.delete("all")
-
         for (row, col), value in self.data.items():
             x1 = col * self.cellWidth
             y1 = row * self.cellHeight
@@ -448,7 +494,8 @@ class TriplicateGUI:
                                              self.originalData, 
                                              showData=False, 
                                              cellStyle=self.styleStrategy)
-        self.table.canvas.bind("<Button-1>", self.handle_row_click)
+        self.table.configure_interaction_mode(allowDrag=False, on_click=self.handle_row_click)
+        self.selectionRect = None
         self.table.pack(expand=True, fill='both')
         self.receptorInfo = ttk.Treeview(self.dataFrame,
                                          columns=("labels"),
@@ -482,14 +529,30 @@ class TriplicateGUI:
     # bound to mouse 1 when selecting rows for receptors
     def handle_row_click(self, event):
         row, col = self.table.cell_from_click(event)
-        self.selectionStrategy.on_click(row, col)
+        self.selectionStrategy.on_click(row, col, event)
         self.table.draw_table(self.styleStrategy)
 
-    # bound to mouse 1 when selecting triplicates
-    def handle_trip_click(self, event):
+    def handle_row_drag(self, event):
         row, col = self.table.cell_from_click(event)
-        self.selectionStrategy.on_click(row, col)
-        self.select_triplicate((row, col // 3))
+        rectCoords = self.selectionStrategy.on_drag(row, col, event)
+        self.table.canvas.delete(self.selectionRect)
+        self.selectionRect = self.table.canvas.create_rectangle(*rectCoords)
+
+    def handle_row_release(self, event):
+        pass
+
+    # for ease of assigning a whole plate to a receptor
+    def select_all_rows(self):
+        previouslySelected = set()
+        for row in self.selectedRows:
+            previouslySelected.add(row)
+        self.selectedRows.clear()
+        for row in range(0, 8):
+            if row in self.assignedRows:
+                continue
+            self.selectedRows.add((row))
+            if row in previouslySelected:
+                continue
         self.table.draw_table(self.styleStrategy)
 
     # adjust height of receptor Treeview when changed
@@ -514,7 +577,6 @@ class TriplicateGUI:
                                 text=receptorName,
                                 values=[rowString])
         self.selectedRows.clear()
-        print(f"Rows in triplicate gui selected after reset: {self.selectedRows}")
         self.table.draw_table(self.styleStrategy)
         self.ui_state()
 
@@ -571,8 +633,8 @@ class TriplicateGUI:
         self.table = CustomTable(self.dataFrame, 
                                        self.originalData, 
                                        showData=False, 
-                                       cellStyle=self.styleStrategy)        
-        self.table.canvas.bind("<Button-1>", self.handle_trip_click)
+                                       cellStyle=self.styleStrategy)     
+        self.table.configure_interaction_mode(allowDrag=False, on_click=self.handle_trip_click)
         self.table.pack(expand=True, fill='both')
         for col in self.columns:
             self.tree.heading(col, text=col)
@@ -618,6 +680,13 @@ class TriplicateGUI:
         self.select_triplicate(self.currentKey)
         #self.table.update_triplet(self.currentKey)
 
+    # bound to mouse 1 when selecting triplicates
+    def handle_trip_click(self, event):
+        row, col = self.table.cell_from_click(event)
+        self.selectionStrategy.on_click(row, col, event)
+        self.select_triplicate((row, col // 3))
+        self.table.draw_table(self.styleStrategy)
+
     # used if there is a concentration of drug
     def enable_entries(self):
         self.nameRequired = True
@@ -651,6 +720,8 @@ class TriplicateGUI:
 
     # fetch data for triplet and show in Treeview
     def select_triplicate(self, key):
+        if key not in self.dataDict.keys():
+            return
         self.currentKey = key
         tripData = self.dataDict[self.currentKey]
         self.triplicateEntry.delete(0, tk.END)
@@ -692,20 +763,6 @@ class TriplicateGUI:
         self.drugDict[self.currentKey] = drugName
         self.concDict[self.currentKey] = concVal
         return 1
-
-    # for ease of assigning a whole plate to a receptor
-    def select_all_rows(self):
-        previouslySelected = set()
-        for row in self.selectedRows:
-            previouslySelected.add(row)
-        self.selectedRows.clear()
-        for row in range(0, 8):
-            if row in self.assignedRows:
-                continue
-            self.selectedRows.add((row))
-            if row in previouslySelected:
-                continue
-        self.table.draw_table(self.styleStrategy)
 
     # deprecated but right idea - logic needs to move to h5/json/external storage
     # need a good way to divide experiments by identifiers
