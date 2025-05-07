@@ -305,6 +305,9 @@ class TripletSelector(SelectionStrategy):
         if (row, col) == (self.rowClicked, self.colClicked):
             return []
         return([self.clickX, self.clickY, latestX, latestY])
+    
+    def on_release(self, row, col, event):
+        pass
 
     def get_selected_cells(self):
         return{(row, col) 
@@ -408,12 +411,14 @@ class CustomTable(tk.Frame):
         else:
             self.cellWidth = 30
             self.cellHeight = 15
+        self.numRows = 8
+        self.numColumns = 12
         self.canvas = tk.Canvas(self, 
                                 bg="white", 
                                 bd=0, 
                                 highlightthickness=0, 
-                                height=self.cellHeight*8, 
-                                width=self.cellWidth*12)
+                                height=self.cellHeight*self.numRows, 
+                                width=self.cellWidth*self.numColumns)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.bindings = {}
         self.data = data
@@ -461,6 +466,9 @@ class CustomTable(tk.Frame):
         col = event.x // self.cellWidth
         return row, col
     
+    def get_pixel_width(self):
+        return self.numColumns * self.cellWidth
+    
 # allows for manual entry of triplicate data and concentrations
 class TriplicateGUI:
     def __init__(self, main, plate):
@@ -475,8 +483,10 @@ class TriplicateGUI:
         self.receptorByRow = 8*[None]
         self.main = main
         self.dataFrame = tk.Frame(self.main)
-        self.entryFrame = tk.Frame(self.main,
-                                   )
+        self.entryFrame = tk.Frame(self.main)
+        self.dataFrame.pack()
+        self.dataFrame.pack_propagate
+        self.entryFrame.pack()
         self.columns = ["1", "2", "3"]
         self.receptorList = {}
         self.plate = plate
@@ -496,13 +506,16 @@ class TriplicateGUI:
                                              cellStyle=self.styleStrategy)
         self.table.configure_interaction_mode(allowDrag=False, on_click=self.handle_row_click)
         self.selectionRect = None
-        self.table.pack(expand=True, fill='both')
+        self.table.pack(expand=True, fill="both")
+        tableWidth = self.table.get_pixel_width()
         self.receptorInfo = ttk.Treeview(self.dataFrame,
                                          columns=("labels"),
                                          height=1)
         self.receptorInfo.heading("#0", text="Receptor Name")
         self.receptorInfo.heading("labels", text="Row Labels")
-        self.receptorInfo.pack()
+        self.receptorInfo.column("#0", width=tableWidth // 2, stretch=False)
+        self.receptorInfo.column("labels", width=tableWidth // 2, stretch=False)
+        self.receptorInfo.pack(fill="both", expand=True)
         self.receptorEntry = tk.Entry(self.entryFrame)
         self.receptorAddButton = tk.Button(self.entryFrame,
                                            text="Assign receptor",
@@ -523,8 +536,6 @@ class TriplicateGUI:
         self.receptorRemoveButton.grid(row=1, column=2)
         self.selectAllRowsButton.grid(row=1, column=3)
         self.receptorsAssigned = False
-        self.dataFrame.pack(fill="both", expand="yes")
-        self.entryFrame.pack(fill="both", expand="yes")
      
     # bound to mouse 1 when selecting rows for receptors
     def handle_row_click(self, event):
@@ -591,9 +602,9 @@ class TriplicateGUI:
         for row in rowList:
             rowIdx = ord(row) - ord('A')
             self.assignedRows.remove(rowIdx)
-            self.table.unassign_rows([rowIdx])
         self.receptorInfo.delete(curItem)
         self.update_treeview()
+        self.table.draw_table(self.styleStrategy)
         self.ui_state()
 
     # allow confirm when all rows are assigned
@@ -635,14 +646,16 @@ class TriplicateGUI:
                                        showData=False, 
                                        cellStyle=self.styleStrategy)     
         self.table.configure_interaction_mode(allowDrag=False, on_click=self.handle_trip_click)
-        self.table.pack(expand=True, fill='both')
+        self.table.pack(expand=True, fill='both')        
+        tableWidth = self.table.get_pixel_width()
+
+        self.saveTree.column("#0", width=tableWidth // 2)
+        self.saveTree.column("conc", width=tableWidth // 2)
         for col in self.columns:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=120, anchor = "center")
+            self.tree.column(col, width=tableWidth // len(self.columns), anchor = "center")
         self.tree.pack(expand=True, fill='both')
-        self.tree.pack_propagate(0)
         self.saveTree.pack(expand=True, fill='both')
-        self.saveTree.pack_propagate(0)
         self.concentrationVal = tk.IntVar()
         self.radio1 = tk.Radiobutton(self.entryFrame,
                                      text="100 nM",
