@@ -278,7 +278,7 @@ class MultiCellSelector(SelectionStrategy):
         return self.selectedCells
 
 # select/deselect the triplet containing the cell that was clicked
-class TripletSelector(SelectionStrategy):
+class SingleTripletSelector(SelectionStrategy):
     def __init__(self, selectedTriplets, lockedTriplets):
         self.selectedTriplets = selectedTriplets
         self.lockedTriplets = lockedTriplets
@@ -293,26 +293,40 @@ class TripletSelector(SelectionStrategy):
         self.rowClicked = row
         self.colClicked = col
         triplet = col // 3
+    
+    def on_drag(self, row, col, event):
+        latestX = event.x
+        latestY = event.y
+        #if (row, col) == (self.rowClicked, self.colClicked):
+        #    return []
+        return([self.clickX, self.clickY, latestX, latestY])
+    
+    def on_release(self, row, col, event):
+        triplet = col // 3
         if (row, triplet) in self.selectedTriplets:
             self.selectedTriplets.remove((row, triplet))
             return
         self.selectedTriplets.clear()
         self.selectedTriplets.add((row, triplet))
-    
-    def on_drag(self, row, col, event):
-        latestX = event.x
-        latestY = event.y
-        if (row, col) == (self.rowClicked, self.colClicked):
-            return []
-        return([self.clickX, self.clickY, latestX, latestY])
-    
-    def on_release(self, row, col, event):
-        pass
 
     def get_selected_cells(self):
         return{(row, col) 
                for (row, startCol) in self.selectedTriplets 
                for col in range(startCol*3, startCol*3 + 3)}
+
+class MultiTripletSelector(SingleTripletSelector):
+    def on_release(self, row, col, event):
+        rows = [row, self.rowClicked]
+        cols = [col, self.colClicked]
+        rowRange = range(min(rows), max(rows) + 1)
+        colRange = range(min(cols), max(cols) + 1)
+        tripletsIncluded = np.unique([x // 3 for x in colRange])
+        for row in rowRange:
+            for triplet in tripletsIncluded:
+                if (row, triplet) in self.selectedTriplets:
+                    self.selectedTriplets.remove((row, triplet))
+                else:
+                    self.selectedTriplets.add((row, triplet))
 
 class RowSelector(SelectionStrategy):
     def __init__(self, selectedRows, lockedRows):
@@ -376,8 +390,7 @@ class HighlightSelection(CellStyleResolver):
         parentSelection = self.strategy.get_selected_cells()
         if (row, col) in parentSelection:
             return CellStyle(fill="firebrick1", outline="black", width=2)
-        else:
-            return CellStyle
+        return CellStyle
         
 class HighlightAndLockSelection(CellStyleResolver):
     def __init__(self, selectionSet, lockedCells, selectionStrategy):
@@ -389,12 +402,32 @@ class HighlightAndLockSelection(CellStyleResolver):
         parentSelection = self.strategy.get_selected_cells() or {}
         parentLock = self.strategy.get_locked_cells() or {}
         if (row, col) in parentSelection:
-            return CellStyle(fill="firebrick1", outline="black", width=2)
+            return CellStyle(fill="firebrick1")
         elif (row, col) in parentLock:
-            return CellStyle(fill="dodger blue", outline="black", width=2)
-        else:
-            return CellStyle
+            return CellStyle(fill="dodger blue")
+        return CellStyle
         
+class BlueWeighingSelection(HighlightAndLockSelection):
+
+    def get_cell_style(self, row, col):
+        parentSelection = self.strategy.get_selected_cells() or {}
+        parentLock = self.strategy.get_locked_cells() or {}
+        if (row, col) in parentSelection:
+            return CellStyle(fill="Blue")
+        elif (row, col) in parentLock:
+            return CellStyle(fill="Blue", outline="dark slate gray")
+        return CellStyle
+        
+class BlackWeighingSelection(HighlightAndLockSelection):
+    def get_cell_style(self, row, col):
+        parentSelection = self.strategy.get_selected_cells() or {}
+        parentLock = self.strategy.get_locked_cells() or {}
+        if (row, col) in parentSelection:
+            return CellStyle(fill="gray10")
+        elif (row, col) in parentLock:
+            return CellStyle(fill="black")
+        return CellStyle
+    
 # Allows for custom behavior in tabular data like cell selection and highlighting
 class CustomTable(tk.Frame):
     def __init__(self, 
@@ -426,16 +459,19 @@ class CustomTable(tk.Frame):
         self.draw_table(self.cellStyle)
     
     # controls bindings via passing SelectionStrategy methods in
-    def configure_interaction_mode(self, allowDrag = False, 
+    def configure_interaction_mode(self, 
+                                   allowDrag=False, 
+                                   cellStyle: CellStyleResolver=None,
                                    on_click=None, 
                                    on_drag=None, 
                                    on_release=None):
         self.unbind_all_mouse_events()
+        self.cellStyle = cellStyle
         if on_click:
             self.bindings["<Button-1>"] = self.canvas.bind("<Button-1>", on_click)
         if allowDrag and on_drag:
             self.bindings["<B1-Motion>"] = self.canvas.bind("<B1-Motion>", on_drag)
-        if allowDrag and on_release:
+        if on_release:
             self.bindings["<ButtonRelease-1>"] = self.canvas.bind("<ButtonRelease-1>", on_release)
 
     def unbind_all_mouse_events(self):
@@ -452,7 +488,9 @@ class CustomTable(tk.Frame):
             x2 = x1 + self.cellWidth
             y2 = y1 + self.cellHeight
             style = styleResolver.get_cell_style(row, col)
-            self.canvas.create_rectangle(x1, y1, x2, y2, 
+            inset = style.width / 2
+            insetRect = [x1 + inset, y1 + inset, x2 - inset, y2 - inset]
+            self.canvas.create_rectangle(*insetRect, 
                                          outline=style.outline, 
                                          fill=style.fill, 
                                          width=style.width)
@@ -461,7 +499,7 @@ class CustomTable(tk.Frame):
                                         y1 + self.cellHeight/2, 
                                         text=value)
 
-    def cell_from_click(self, event):
+    def cell_from_event(self, event):
         row = event.y // self.cellHeight
         col = event.x // self.cellWidth
         return row, col
@@ -504,7 +542,10 @@ class TriplicateGUI:
                                              self.originalData, 
                                              showData=False, 
                                              cellStyle=self.styleStrategy)
-        self.table.configure_interaction_mode(allowDrag=False, on_click=self.handle_row_click)
+        self.table.configure_interaction_mode(allowDrag=False, 
+                                              on_click=self.handle_row_click,
+                                              on_drag=self.handle_row_drag,
+                                              on_release = self.handle_row_release)
         self.selectionRect = None
         self.table.pack(expand=True, fill="both")
         tableWidth = self.table.get_pixel_width()
@@ -539,17 +580,18 @@ class TriplicateGUI:
      
     # bound to mouse 1 when selecting rows for receptors
     def handle_row_click(self, event):
-        row, col = self.table.cell_from_click(event)
+        row, col = self.table.cell_from_event(event)
         self.selectionStrategy.on_click(row, col, event)
         self.table.draw_table(self.styleStrategy)
 
     def handle_row_drag(self, event):
-        row, col = self.table.cell_from_click(event)
+        row, col = self.table.cell_from_event(event)
         rectCoords = self.selectionStrategy.on_drag(row, col, event)
         self.table.canvas.delete(self.selectionRect)
         self.selectionRect = self.table.canvas.create_rectangle(*rectCoords)
 
     def handle_row_release(self, event):
+        self.table.canvas.delete(self.selectionRect)
         pass
 
     # for ease of assigning a whole plate to a receptor
@@ -629,8 +671,6 @@ class TriplicateGUI:
 
     # confirm receptor assignment and proceed to triplicate
     def assign_receptors(self):
-        self.selectionStrategy = TripletSelector(self.selectedTriplets, None)
-        self.styleStrategy = HighlightSelection(self.selectedTriplets, self.selectionStrategy)
         self.unload_receptor_gui()
         self.tree = ttk.Treeview(self.dataFrame, 
                                  columns=self.columns, 
@@ -641,11 +681,14 @@ class TriplicateGUI:
                                      height=1)
         self.saveTree.heading("#0", text="Drug Name")
         self.saveTree.heading("conc", text="Concentration")
+        self.selectionStrategy = SingleTripletSelector(self.selectedTriplets, None)
+        self.styleStrategy = HighlightSelection(self.selectedTriplets, self.selectionStrategy)
+
         self.table = CustomTable(self.dataFrame, 
                                        self.originalData, 
                                        showData=False, 
-                                       cellStyle=self.styleStrategy)     
-        self.table.configure_interaction_mode(allowDrag=False, on_click=self.handle_trip_click)
+                                       cellStyle=self.styleStrategy)  
+        self.assign_triplicate_info()   
         self.table.pack(expand=True, fill='both')        
         tableWidth = self.table.get_pixel_width()
 
@@ -687,6 +730,18 @@ class TriplicateGUI:
                                       text="Save entries",
                                       command=self.cycle_data)
         self.changeButton.grid(row=2, column=1)
+        self.blueWeighingButton = tk.Button(self.entryFrame,
+                                            text="Assign blue weighing",
+                                            command=self.assign_blue_weighing)
+        self.blueWeighingButton.grid(row=3, column=0)
+        self.blackWeighingButton = tk.Button(self.entryFrame,
+                                             text="Assign black weighing",
+                                             command=self.assign_black_weighing)
+        self.blackWeighingButton.grid(row=3, column=1)
+        self.selectTriplicateButton = tk.Button(self.entryFrame,
+                                                text="Single triplicate selection",
+                                                command=self.assign_triplicate_info)
+        self.selectTriplicateButton.grid(row=3, column=2)
         self.currentKey = (0, 0)
         self.selectedTriplets.add(self.currentKey)
         self.table.draw_table(self.styleStrategy)
@@ -695,10 +750,63 @@ class TriplicateGUI:
 
     # bound to mouse 1 when selecting triplicates
     def handle_trip_click(self, event):
-        row, col = self.table.cell_from_click(event)
+        row, col = self.table.cell_from_event(event)
         self.selectionStrategy.on_click(row, col, event)
         self.select_triplicate((row, col // 3))
         self.table.draw_table(self.styleStrategy)
+
+    def handle_trip_drag(self, event):
+        row, col = self.table.cell_from_event(event)
+        rectCoords = self.selectionStrategy.on_drag(row, col, event)
+        self.table.draw_table(self.styleStrategy)
+        self.selectionRect = self.table.canvas.create_rectangle(*rectCoords)
+
+    def handle_trip_release(self, event):
+        row, col = self.table.cell_from_event(event)
+        self.selectionStrategy.on_release(row, col, event)
+        self.table.draw_table(self.styleStrategy)     
+   
+    def assign_triplicate_info(self):
+        self.selectionStrategy = SingleTripletSelector(self.selectedTriplets, None)
+        self.styleStrategy = HighlightSelection(self.selectedTriplets, self.selectionStrategy)
+        self.table.configure_interaction_mode(allowDrag=False, 
+                                              cellStyle=self.styleStrategy,
+                                              on_click=self.handle_trip_click,
+                                              on_drag=self.handle_trip_drag,
+                                              on_release=self.handle_trip_release)
+        self.reset_triplets()
+        
+    def assign_blue_weighing(self):
+        self.selectionStrategy = MultiTripletSelector(self.selectedTriplets,
+                                                      self.assignedTriplets)
+        self.styleStrategy = BlueWeighingSelection(self.selectedTriplets, 
+                                                   self.assignedTriplets, 
+                                                   self.selectionStrategy)
+        self.table.configure_interaction_mode(allowDrag=True,
+                                              cellStyle=self.styleStrategy,
+                                              on_click=self.handle_trip_click,
+                                              on_drag=self.handle_trip_drag,
+                                              on_release=self.handle_trip_release)
+        self.reset_triplets()
+
+    def assign_black_weighing(self):
+        self.selectionStrategy = MultiTripletSelector(self.selectedTriplets,
+                                                      self.assignedTriplets)
+        self.styleStrategy = BlackWeighingSelection(self.selectedTriplets, 
+                                                   self.assignedTriplets, 
+                                                   self.selectionStrategy)
+        self.table.configure_interaction_mode(allowDrag=True,
+                                              cellStyle=self.styleStrategy,
+                                              on_click=self.handle_trip_click,
+                                              on_drag=self.handle_trip_drag,
+                                              on_release=self.handle_trip_release)
+        self.reset_triplets()
+        
+    def reset_triplets(self):
+        self.selectedTriplets.clear()
+        self.assignedTriplets.clear()
+        self.table.draw_table(self.styleStrategy)
+
 
     # used if there is a concentration of drug
     def enable_entries(self):
@@ -893,7 +1001,7 @@ class WellDataGUI:
         self.main.geometry(f"{totalWidth}x500")
 
     def handle_click(self, event):
-        row, col = self.table.cell_from_click(event)
+        row, col = self.table.cell_from_event(event)
         self.selectionStrategy.on_click(row, col)
         self.table.draw_table(self.styleStrategy)
 
