@@ -297,8 +297,6 @@ class SingleTripletSelector(SelectionStrategy):
     def on_drag(self, row, col, event):
         latestX = event.x
         latestY = event.y
-        #if (row, col) == (self.rowClicked, self.colClicked):
-        #    return []
         return([self.clickX, self.clickY, latestX, latestY])
     
     def on_release(self, row, col, event):
@@ -314,8 +312,17 @@ class SingleTripletSelector(SelectionStrategy):
                for (row, startCol) in self.selectedTriplets 
                for col in range(startCol*3, startCol*3 + 3)}
 
+# allow multiple triplets to be selected
 class MultiTripletSelector(SingleTripletSelector):
     def on_release(self, row, col, event):
+        if row < 0:
+            row = 0
+        if row > 7:
+            row = 7
+        if col < 0:
+            col = 0
+        if col > 11:
+            col = 11
         rows = [row, self.rowClicked]
         cols = [col, self.colClicked]
         rowRange = range(min(rows), max(rows) + 1)
@@ -328,6 +335,7 @@ class MultiTripletSelector(SingleTripletSelector):
                 else:
                     self.selectedTriplets.add((row, triplet))
 
+# select cells by row (no single selector yet)
 class RowSelector(SelectionStrategy):
     def __init__(self, selectedRows, lockedRows):
         self.selectedRows = selectedRows
@@ -340,23 +348,38 @@ class RowSelector(SelectionStrategy):
     def on_click(self, row, col, event):
         if col not in range(0, 12):
             return
-        if row in self.lockedRows:
-            return
+        #if row in self.lockedRows:
+        #    return
         self.clickX = event.x
         self.clickY = event.y
         self.rowClicked = row
         self.colClicked = col
-        if row in self.selectedRows:
-            self.selectedRows.remove(row)
-            return
+        #if row in self.selectedRows:
+        #    self.selectedRows.remove(row)
+        #    return
         #self.selectedRows.clear() #commented out while i figure out how to divide multiselect
-        self.selectedRows.add(row)
+        #self.selectedRows.add(row)
 
     def on_drag(self, row, col, event):
         latestX = event.x
         latestY = event.y
         return([self.clickX, self.clickY, latestX, latestY])
     
+    def on_release(self, row, col, event):
+        if row < 0:
+            row = 0
+        if row > 7:
+            row = 7
+        rows = [row, self.rowClicked]
+        rowRange = range(min(rows), max(rows) + 1)
+        for row in rowRange:
+            if row in self.lockedRows:
+                continue
+            if row in self.selectedRows:
+                self.selectedRows.remove(row)
+            else:
+                self.selectedRows.add(row)
+
     def get_selected_cells(self):
         return {(row, col)
                 for row in self.selectedRows
@@ -367,6 +390,7 @@ class RowSelector(SelectionStrategy):
                for row in self.lockedRows
                for col in range(0, 12)}
     
+# contains default cell styling params to pass to CustomTable
 @dataclass
 class CellStyle:
     fill: str = "white"
@@ -375,6 +399,7 @@ class CellStyle:
     font: str = "TkDefaultFont"
     width: int = 2
 
+# abstract base class for different stylings, returning a CellStyle object
 class CellStyleResolver(ABC):
     @abstractmethod
     def get_cell_style(self, row, col) -> CellStyle:
@@ -542,7 +567,7 @@ class TriplicateGUI:
                                              self.originalData, 
                                              showData=False, 
                                              cellStyle=self.styleStrategy)
-        self.table.configure_interaction_mode(allowDrag=False, 
+        self.table.configure_interaction_mode(allowDrag=True, 
                                               on_click=self.handle_row_click,
                                               on_drag=self.handle_row_drag,
                                               on_release = self.handle_row_release)
@@ -591,8 +616,9 @@ class TriplicateGUI:
         self.selectionRect = self.table.canvas.create_rectangle(*rectCoords)
 
     def handle_row_release(self, event):
-        self.table.canvas.delete(self.selectionRect)
-        pass
+        row, col = self.table.cell_from_event(event)
+        self.selectionStrategy.on_release(row, col, event)
+        self.table.draw_table(self.styleStrategy)
 
     # for ease of assigning a whole plate to a receptor
     def select_all_rows(self):
@@ -621,6 +647,8 @@ class TriplicateGUI:
         self.receptorEntry.delete(0, tk.END)
         rowLetters = [chr(ord('A') + row) for row in self.selectedRows]
         rowString = ', '.join(rowLetters)
+        print(self.selectedRows)
+        print(self.receptorByRow)
         for i in self.selectedRows:
             self.assignedRows.add(i)
             self.receptorByRow[i] = receptorName
