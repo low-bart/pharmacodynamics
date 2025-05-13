@@ -10,11 +10,14 @@ import traceback
 import os
 
 # This class is intended to synchronize WellData and corresponding DrugReports metadata
+
 class AssayMetadata:
     date = []
     ctr = []
     plate = []
+    drug = []
     receptor = []
+    concentration = []
     h5Path = []
     rawDataPath = []
 
@@ -28,19 +31,12 @@ class AssayMetadata:
         print(self.h5Path)
         print(self.rawDataPath)
 
-# Stores 96 well-plate pharmacology assay data
+# Stores 96 well-plate pharmacology assay data. Base class for multiple assays
 class WellData:
     metadata = AssayMetadata()
-    drugs = []                  # list of drugs on plate, one per two rows
     comments = []               # list
     data = []                   # well plate data
-    totals = []                 # well plate totals with no drug
-    nsb = []                    # well plate non-specific binding
-    highestConc = []            # log [drug]
     plateNo = []                # plate number from original assay
-    specificActivityCi = []     # concentration entered by user
-    specificActivityCpm = []    # concentration converted  
-    volMl = []                  # volume of radioactive ligand added
     omittedVals = []            # list of values from original well data that are omitted by user selection
 
     def __init__(self, df, plate=1):
@@ -48,33 +44,52 @@ class WellData:
             self.data = df
         else:
             self.data = df.loc[df.index[0:8], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
-        self.drugs = ["Drug1", "Drug2", "Drug3", "Drug4"]
-        self.highestConc = [None, None, None, None]
-        plateTotals = self.data.loc[self.data.index[0:8], [1, 12]]
-        self.totals = np.average(plateTotals)
-        plateNSB = self.data.loc[self.data.index[0:8], 2]
-        self.nsb = np.average(plateNSB) 
         self.plateNo = plate
 
     def display(self):
         print(self.data)
         for c in self.comments:
             print(c)
-        for d in self.drugs:
-            print(d)
 
     def add_comment(self, comment):
         self.comments.append(comment)
 
+    def set_date(self, dateStr):
+        self.metadata.date = dateStr
+
+# For use with binding assays 
+class BindingPlate(WellData):
+    drugs = []                  # list of drugs on plate, one per two rows
+    totals = []                 # well plate totals with no drug
+    nsb = []                    # well plate non-specific binding
+    highestConc = []            # log [drug]
+    specificActivityCi = []     # concentration entered by user
+    specificActivityCpm = []    # concentration converted  
+    volMl = []                  # volume of radioactive ligand added
+
+    def __init__(self, df, plate):
+        super().__init__(df, plate)
+        self.drugs = ["Drug1", "Drug2", "Drug3", "Drug4"]
+        self.highestConc = [None, None, None, None]
+        plateTotals = self.data.loc[self.data.index[0:8], [1, 12]]
+        self.totals = np.average(plateTotals)
+        plateNSB = self.data.loc[self.data.index[0:8], 2]
+        self.nsb = np.average(plateNSB) 
+
+    def display(self):
+        super().display()
+        for d in self.drugs:
+            print(d)
+
     def make_drug_report(self, index):
         return DrugReports(self, index)
-    
+
     def make_all_drug_reports(self):
         reports = []
         for i in range(4):
             reports.append(DrugReports(self, i))
         return reports
-
+    
     def update_drugs(self, drugName, idx):
         self.drugs[idx] = drugName
 
@@ -84,8 +99,10 @@ class WellData:
     def update_receptor(self, receptorName):
         self.metadata.receptor = receptorName
 
-    def set_date(self, dateStr):
-        self.metadata.date = dateStr
+# For use with screening assays
+class ScreeningPlate(WellData):
+    def __init__(self, df, plate):
+        super().__init__(df, plate)
 
 # Stores assay for one drug/receptor/date combination
 class DrugReports:
@@ -121,6 +138,18 @@ class DrugReports:
         self.specific = self.specific[0].tolist()
         self.pctTotal = self.pctTotal[0].tolist()
 
+
+class TriplicateScreen:
+    def __init__(self, vals, metadata, nsb, totals):
+        self.values = vals
+        self.metadata = metadata
+        self.nsb = np.mean(nsb)
+        self.totals = np.mean(totals)
+
+    def calculate_totals(self):
+        specificActivity = np.meanself.values - self.nsb
+        totalSpecific = np.mean(self.totals) - self.nsb
+        
 # Produces summary tables for NIDA reports
 class SummaryTable:
     receptors = ["D1", "D2", "D3", "D4", 

@@ -2,7 +2,7 @@ import pickle
 import h5py
 import pandas as pd
 import numpy as np
-from PharmOps import WellData
+from PharmOps import *
 from importlib.metadata import version
 from platformdirs import user_data_dir
 import os
@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 import openpyxl as pxl
 
-# Parses a text file containing raw well-plate data and makes WellData objects
+# Parses a text file containing raw well-plate data and makes BindingPlate objects
 def read_raw_well_txt(filepath):
     rawData = pd.read_csv(filepath)
     pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
@@ -55,14 +55,14 @@ def read_raw_well_txt(filepath):
         df = pd.DataFrame(numericRows, columns=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
         df.index = [row[0].strip()[-1] for row in rows if row[0].strip()[-1] in rowLabels]
         cleanedData[plate] = df
-    # make WellData array
+    # make BindingPlate array
     wellDataObjects = []
     for plate, df in cleanedData.items():
-        wellDataObjects.append(WellData(df, plate))
+        wellDataObjects.append(BindingPlate(df, plate))
         wellDataObjects[-1].set_date(assayDate)
     return wellDataObjects
 
-# Deprecated method for making WellData from a csv
+# Deprecated method for making BindingPlate from a csv
 def read_raw_well_csv(filepath):
     rawData = pd.read_excel(filepath)
     rawWellValues = rawData.loc[rawData.index[0:8], range(1, 12)]    
@@ -86,8 +86,8 @@ def prepare_binary(obj):
     serializedArray = np.frombuffer(serializedObj, dtype='uint8')
     return serializedArray
 
-# save WellData obj to h5
-def save_new_WellData(wellData, filepath):
+# save BindingPlate obj to h5
+def save_new_BindingPlate(wellData: BindingPlate, filepath):
     serializedArray = prepare_binary(wellData)
     parsedDate = convert_date_string(wellData.metadata.date)
     plateNo = wellData.metadata.plate
@@ -97,7 +97,7 @@ def save_new_WellData(wellData, filepath):
         group.attrs["version"] = version("PharmOps")
 
 # save DrugReports obj to h5
-def save_new_DrugReport(drugRep, filepath):
+def save_new_DrugReport(drugRep: DrugReports, filepath):
     serializedArray = prepare_binary(drugRep)
     drugName = drugRep.drug
     receptorName = drugRep.metadata.receptor
@@ -107,9 +107,13 @@ def save_new_DrugReport(drugRep, filepath):
         grp = group.create_dataset(parsedDate, data=serializedArray)
         group.attrs["version"] = version("PharmOps")
 
-def save_new_triplicate_assay(triplet, filepath):
-    serializedArray = prepare_binary(triplet)
+# save new screening for triplicates to h5
+def save_new_screening_plate(plate: ScreeningPlate):
+    pass
     
+def save_new_triplicate_assay(triplet: TriplicateScreen, filepath):
+    serializedArray = prepare_binary(triplet)
+    drugName = triplet.metadata.drug
 
 # load existing DrugReports from h5 via unserializing 
 def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):

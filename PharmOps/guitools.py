@@ -14,12 +14,12 @@ class BindingGUI:
         self.main = main
         self.frame = tk.Frame(self.main)
         self.frame.pack()
-        self.newWellDataButton = tk.Button(self.frame, 
-                                            text="Load new WellData", 
-                                            command=self.import_WellData)
-        self.loadWellDataButton = tk.Button(self.frame,
-                                            text="Load saved WellData",
-                                            command=self.load_WellData)
+        self.newBindingPlateButton = tk.Button(self.frame, 
+                                            text="Load new binding assay", 
+                                            command=self.import_BindingPlate)
+        self.loadBindingPlateButton = tk.Button(self.frame,
+                                            text="Load saved binding assay",
+                                            command=self.load_BindingPlate)
         self.loadDrugReportsButton = tk.Button(self.frame, 
                                                text="Load saved DrugReports", 
                                                command=self.load_DrugReports)
@@ -32,8 +32,8 @@ class BindingGUI:
         self.labelTriplicatesButton = tk.Button(self.frame,
                                                 text="Label triplicate data",
                                                 command=self.parse_triplicates)
-        self.newWellDataButton.pack()
-        self.loadWellDataButton.pack()
+        self.newBindingPlateButton.pack()
+        self.loadBindingPlateButton.pack()
         self.loadDrugReportsButton.pack()
         self.generateSummaryTableButton.pack()
         self.generateTemplateButton.pack()
@@ -84,8 +84,8 @@ class BindingGUI:
         for index, row in countPlate.iterrows():
             print(row)
     
-    # loads new window from WellDataGUI class to import WellData from text file
-    def import_WellData(self):
+    # loads new window from BindingPlateGUI class to import BindingPlate from text file
+    def import_BindingPlate(self):
         fileName = filedialog.askopenfilename(
             initialdir=r"e:/PharmOps-sample-data/sample data", 
             title='Select a file', 
@@ -106,7 +106,7 @@ class BindingGUI:
             if num == countPlate-1:
                 continue
             newWindow = tk.Toplevel(self.main)
-            WellDataGUI(newWindow, plate)
+            BindingPlateGUI(newWindow, plate)
             self.main.wait_window(newWindow)
 
     # loads new waitwindow making user pick count plate, radioligand concentration, and multiplication factor
@@ -185,8 +185,8 @@ class BindingGUI:
             selectedPlateInt = 0
         return selectedPlateInt, multiplicationFactor.get()
 
-    # will load and display WellData from h5 file
-    def load_WellData(self):
+    # will load and display BindingPlate from h5 file
+    def load_BindingPlate(self):
         pass
 
     # loads and displays DrugReports from DrugReportsGUI
@@ -955,8 +955,8 @@ class TriplicateGUI:
         print(averages)
         print(sem)
 
-# guitools for displaying and manipulating new and saved WellData        
-class WellDataGUI:
+# guitools for displaying and manipulating new and saved BindingPlate        
+class BindingPlateGUI:
     def __init__(self, main, plate):
         self.main = main
         self.dataFrame = tk.Frame(self.main)
