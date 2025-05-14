@@ -10,11 +10,10 @@ import traceback
 import os
 
 # This class is intended to synchronize WellData and corresponding DrugReports metadata
-
 class AssayMetadata:
     date = []
     ctr = []
-    plate = []
+    plateNo = []
     drug = []
     receptor = []
     concentration = []
@@ -39,12 +38,12 @@ class WellData:
     plateNo = []                # plate number from original assay
     omittedVals = []            # list of values from original well data that are omitted by user selection
 
-    def __init__(self, df, plate=1):
+    def __init__(self, df, plateNum=1):
         if df.size == 96:
             self.data = df
         else:
             self.data = df.loc[df.index[0:8], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
-        self.plateNo = plate
+        self.metadata.plateNo = plateNum
 
     def display(self):
         print(self.data)
@@ -103,6 +102,15 @@ class BindingPlate(WellData):
 class ScreeningPlate(WellData):
     def __init__(self, df, plate):
         super().__init__(df, plate)
+        receptors = []
+        drugDict = {}
+        concDict = {}
+
+    def display(self):
+        super().display()
+        
+    def make_triplicate_reports(self):
+        pass
 
 # Stores assay for one drug/receptor/date combination
 class DrugReports:
@@ -138,7 +146,7 @@ class DrugReports:
         self.specific = self.specific[0].tolist()
         self.pctTotal = self.pctTotal[0].tolist()
 
-
+# Unsure where this class is going - potentially a simple aggregator that calculates % inhib for screening assays
 class TriplicateScreen:
     def __init__(self, vals, metadata, nsb, totals):
         self.values = vals
@@ -147,7 +155,7 @@ class TriplicateScreen:
         self.totals = np.mean(totals)
 
     def calculate_totals(self):
-        specificActivity = np.meanself.values - self.nsb
+        specificActivity = np.mean(self.values) - self.nsb
         totalSpecific = np.mean(self.totals) - self.nsb
         
 # Produces summary tables for NIDA reports

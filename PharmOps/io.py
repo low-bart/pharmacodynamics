@@ -11,7 +11,7 @@ from datetime import datetime
 import openpyxl as pxl
 
 # Parses a text file containing raw well-plate data and makes BindingPlate objects
-def read_raw_well_txt(filepath):
+def read_raw_well_txt(filepath: str, outputClass: WellData):
     rawData = pd.read_csv(filepath)
     pattern = r"Plate \d+.*?(?=Plate \d+|Total count rate:|$)"
     datePattern = r"\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b"    # for regex to find the date
@@ -20,6 +20,7 @@ def read_raw_well_txt(filepath):
             cell = str(rawData.iloc[i][col])
             match = re.search(datePattern, cell)
             if match:
+                print(match)
                 assayDate = match.group(0)              # return the first matched date
                 break
     # parse text file with regex to separate plates
@@ -58,12 +59,12 @@ def read_raw_well_txt(filepath):
     # make BindingPlate array
     wellDataObjects = []
     for plate, df in cleanedData.items():
-        wellDataObjects.append(BindingPlate(df, plate))
+        wellDataObjects.append(outputClass(df, plate))
         wellDataObjects[-1].set_date(assayDate)
     return wellDataObjects
 
 # Deprecated method for making BindingPlate from a csv
-def read_raw_well_csv(filepath):
+def read_raw_well_csv(filepath: str):
     rawData = pd.read_excel(filepath)
     rawWellValues = rawData.loc[rawData.index[0:8], range(1, 12)]    
     return rawWellValues
@@ -87,17 +88,17 @@ def prepare_binary(obj):
     return serializedArray
 
 # save BindingPlate obj to h5
-def save_new_BindingPlate(wellData: BindingPlate, filepath):
+def save_new_BindingPlate(wellData: BindingPlate, filepath: str):
     serializedArray = prepare_binary(wellData)
     parsedDate = convert_date_string(wellData.metadata.date)
-    plateNo = wellData.metadata.plate
+    plateNo = wellData.metadata.plateNo
     with h5py.File(filepath, "a") as h5file:
         group = h5file.require_group("assays/" + parsedDate)
         group.create_dataset(plateNo, data=serializedArray)
         group.attrs["version"] = version("PharmOps")
 
 # save DrugReports obj to h5
-def save_new_DrugReport(drugRep: DrugReports, filepath):
+def save_new_DrugReport(drugRep: DrugReports, filepath: str):
     serializedArray = prepare_binary(drugRep)
     drugName = drugRep.drug
     receptorName = drugRep.metadata.receptor
@@ -108,10 +109,18 @@ def save_new_DrugReport(drugRep: DrugReports, filepath):
         group.attrs["version"] = version("PharmOps")
 
 # save new screening for triplicates to h5
-def save_new_screening_plate(plate: ScreeningPlate):
-    pass
-    
-def save_new_triplicate_assay(triplet: TriplicateScreen, filepath):
+# this saves the actual plate stored by date hash
+def save_new_screening_plate(plate: ScreeningPlate,
+                             filepath: str):
+    serializedArray = prepare_binary(plate)
+    parsedDate = convert_date_string(plate.metadata.date)
+    print(plate.metadata.date)
+    print(plate.metadata.plateNo)
+
+# this saves the drug receptor combo's reference to plate hash
+def save_new_triplicate_assay(plate: ScreeningPlate, 
+                              triplet: tuple, 
+                              filepath: str):
     serializedArray = prepare_binary(triplet)
     drugName = triplet.metadata.drug
 
@@ -138,7 +147,6 @@ def extract_mean_and_sem(row, identifier):
     sem = find_excel_header(row, "sem")
     idCol = find_excel_header(row, identifier)
 
-#
 def load_binding_summary_excel(filepath):
     allowedNames = ("5HT1A", "5HT2A", "5HT2B", "5HT2C", "D1", "D2", "D3", "D4.4")
     workbook = pxl.load_workbook(filepath, data_only=True)

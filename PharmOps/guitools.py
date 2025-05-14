@@ -3,7 +3,7 @@ from tkinter import filedialog, ttk
 from PharmOps import io
 import numpy as np
 import h5py
-from bindMods import SummaryTable, TemplateGenerator
+from bindMods import *
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -93,7 +93,7 @@ class BindingGUI:
                     "*.txt*"),
                     ("all files",
                     "*.*")))
-        wellDataList = io.read_raw_well_txt(fileName)
+        wellDataList = io.read_raw_well_txt(fileName, BindingPlate)
         numPlates = len(wellDataList)
         countPlate, multFactor = self.choose_count_plate(numPlates)
         self.get_user_info()
@@ -218,7 +218,7 @@ class BindingGUI:
                     "*.txt*"),
                     ("all files",
                     "*.*")))
-        wellDataList = io.read_raw_well_txt(fileName)
+        wellDataList = io.read_raw_well_txt(fileName, ScreeningPlate)
         plate = wellDataList[0]
         newWindow = tk.Toplevel(self.main)
         TriplicateGUI(newWindow, plate)
@@ -534,7 +534,7 @@ class CustomTable(tk.Frame):
     
 # allows for manual entry of triplicate data and concentrations
 class TriplicateGUI:
-    def __init__(self, main, plate):
+    def __init__(self, main, plate: ScreeningPlate):
         self.selectedRows = set()
         self.selectedTriplets = set()
         self.assignedTriplets = set()
@@ -601,8 +601,9 @@ class TriplicateGUI:
         self.receptorsConfirmButton.grid(row=1, column=1)
         self.receptorRemoveButton.grid(row=1, column=2)
         self.selectAllRowsButton.grid(row=1, column=3)
+        self.testDateButton.grid(row=2, column=0)
         self.receptorsAssigned = False
-     
+
     # bound to mouse 1 when selecting rows for receptors
     def handle_row_click(self, event):
         row, col = self.table.cell_from_event(event)
@@ -834,7 +835,6 @@ class TriplicateGUI:
         self.selectedTriplets.clear()
         self.assignedTriplets.clear()
         self.table.draw_table(self.styleStrategy)
-
 
     # used if there is a concentration of drug
     def enable_entries(self):
