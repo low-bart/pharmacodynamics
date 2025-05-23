@@ -236,6 +236,21 @@ class SelectionStrategy(ABC):
     def on_release(self, row, col, event, currentSelection):
         return currentSelection
     
+    def on_up_arrow(self, row, col, event, currentSelection):
+        pass
+
+    def on_down_arrow(self, row, col, event, currentSelection):
+        pass
+
+    def on_left_arrow(self, row, col, event, currentSelection):
+        pass
+
+    def on_right_arrow(self, row, col, event, currentSelection):
+        pass
+    
+    def add_selection(self, row, col):
+        pass
+
     def get_selected_cells(self):
         pass
 
@@ -304,8 +319,43 @@ class SingleTripletSelector(SelectionStrategy):
         if (row, triplet) in self.selectedTriplets:
             self.selectedTriplets.remove((row, triplet))
             return
+        self.add_selection(row, triplet)
+
+    def add_selection(self, row, triplet):
         self.selectedTriplets.clear()
         self.selectedTriplets.add((row, triplet))
+
+    def on_up_arrow(self, row, col):
+        triplet = col // 3
+        if row == 0:
+            row = 7
+        else:
+            row -= 1
+        self.add_selection(row, triplet)
+
+    def on_down_arrow(self, row, col):
+        triplet = col // 3
+        if row == 7:
+            row = 0
+        else:
+            row += 1
+        self.add_selection(row, triplet)
+
+    def on_left_arrow(self, row, col):
+        triplet = col // 3
+        if triplet == 0:
+            triplet = 3
+        else:
+            triplet -= 1
+        self.add_selection(row, triplet)
+
+    def on_right_arrow(self, row, col):
+        triplet = col // 3
+        if triplet == 3:
+            triplet = 0
+        else:
+            triplet += 1
+        self.add_selection(row, triplet)
 
     def get_selected_cells(self):
         return{(row, col) 
@@ -498,7 +548,6 @@ class CustomTable(tk.Frame):
             self.bindings["<B1-Motion>"] = self.canvas.bind("<B1-Motion>", on_drag)
         if on_release:
             self.bindings["<ButtonRelease-1>"] = self.canvas.bind("<ButtonRelease-1>", on_release)
-
     def unbind_all_mouse_events(self):
         for eventType, bindID in self.bindings.items():
             self.canvas.unbind(eventType, bindID)
@@ -555,8 +604,6 @@ class TriplicateGUI:
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         self.dataDict = {}
-        self.drugDict = {}
-        self.concDict = {}
         self.nameRequired = True
         self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
         for rowIdx, row in plateData.iterrows():
@@ -601,7 +648,6 @@ class TriplicateGUI:
         self.receptorsConfirmButton.grid(row=1, column=1)
         self.receptorRemoveButton.grid(row=1, column=2)
         self.selectAllRowsButton.grid(row=1, column=3)
-        self.testDateButton.grid(row=2, column=0)
         self.receptorsAssigned = False
 
     # bound to mouse 1 when selecting rows for receptors
@@ -880,10 +926,10 @@ class TriplicateGUI:
         for row in self.saveTree.get_children():
             self.saveTree.delete(row)
         self.tree.insert("", "end", values=tripData)
-        if self.currentKey in self.concDict and self.currentKey in self.drugDict:
+        if self.currentKey in self.plate.concDict and self.currentKey in self.plate.drugDict:
             self.saveTree.insert("", "end", 
-                                 text=self.drugDict[self.currentKey],
-                                 values=[self.concDict[self.currentKey]])
+                                 text=self.plate.drugDict[self.currentKey],
+                                 values=[self.plate.concDict[self.currentKey]])
 
     # confirmation of proper field entries in cycle_data
     def update_current_triplicate(self, rowIdx, tripIdx):
@@ -909,14 +955,14 @@ class TriplicateGUI:
             case 1:
                 concVal = "Totals"
 
-        self.drugDict[self.currentKey] = drugName
-        self.concDict[self.currentKey] = concVal
+        self.plate.drugDict[self.currentKey] = drugName
+        self.plate.concDict[self.currentKey] = concVal
         return 1
 
     # deprecated but right idea - logic needs to move to h5/json/external storage
     # need a good way to divide experiments by identifiers
     def screening_calculation(self):
-        if not all(x in self.drugDict for x in self.dataDict):
+        if not all(x in self.plate.drugDict for x in self.dataDict):
             #return
             a = 1
         results = {}
@@ -924,8 +970,8 @@ class TriplicateGUI:
         sem = {}
         nonSpecific = {receptor: [] for receptor in self.receptorList}
         totals = {receptor: [] for receptor in self.receptorList}
-        for key, drugName in self.drugDict.items():
-            conc = self.concDict[key]
+        for key, drugName in self.plate.drugDict.items():
+            conc = self.plate.concDict[key]
             data = self.dataDict[key]
             receptor = self.receptorByRow[key[0]]
             if receptor not in results:

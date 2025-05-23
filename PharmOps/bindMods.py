@@ -102,9 +102,10 @@ class BindingPlate(WellData):
 class ScreeningPlate(WellData):
     def __init__(self, df, plate):
         super().__init__(df, plate)
-        receptors = []
-        drugDict = {}
-        concDict = {}
+        self.receptors = []
+        self.drugDict = {}
+        self.concDict = {}
+        self.experimentIdx = {}
 
     def display(self):
         super().display()

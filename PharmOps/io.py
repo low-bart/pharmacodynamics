@@ -114,6 +114,14 @@ def save_new_screening_plate(plate: ScreeningPlate,
                              filepath: str):
     serializedArray = prepare_binary(plate)
     parsedDate = convert_date_string(plate.metadata.date)
+    plateID = [parsedDate, '+', plate.metadata.plateNo]
+    with h5py.File(filepath, "a") as h5file:
+        plateGroup = h5file.require_group("screenings/" + "plates/" + plateID)
+        tripletGroup = h5file.require_group("screenings/" + "triplicates/")
+        for triplet in plate.experimentIdx:
+            if plate.drugDict[triplet] == "None":
+                continue
+            tripletGroup.create_group(f"{plate.drugDict[triplet]}/{plate.receptors[triplet[0]]}/")
     print(plate.metadata.date)
     print(plate.metadata.plateNo)
 
@@ -122,7 +130,7 @@ def save_new_triplicate_assay(plate: ScreeningPlate,
                               triplet: tuple, 
                               filepath: str):
     serializedArray = prepare_binary(triplet)
-    drugName = triplet.metadata.drug
+    
 
 # load existing DrugReports from h5 via unserializing 
 def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
