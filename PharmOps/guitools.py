@@ -694,8 +694,6 @@ class TriplicateGUI:
         self.receptorEntry.delete(0, tk.END)
         rowLetters = [chr(ord('A') + row) for row in self.selectedRows]
         rowString = ', '.join(rowLetters)
-        print(self.selectedRows)
-        print(self.receptorByRow)
         for i in self.selectedRows:
             self.assignedRows.add(i)
             self.receptorByRow[i] = receptorName
@@ -954,7 +952,6 @@ class TriplicateGUI:
                 concVal = "Non Specific"
             case 1:
                 concVal = "Totals"
-
         self.plate.drugDict[self.currentKey] = drugName
         self.plate.concDict[self.currentKey] = concVal
         return 1
@@ -963,8 +960,7 @@ class TriplicateGUI:
     # need a good way to divide experiments by identifiers
     def screening_calculation(self):
         if not all(x in self.plate.drugDict for x in self.dataDict):
-            #return
-            a = 1
+            return
         results = {}
         averages = {}
         sem = {}
@@ -994,13 +990,11 @@ class TriplicateGUI:
                 for conc, values in concentrations.items():
                     averages[receptor][drugName][conc] = np.mean(values)
                     sem[receptor][drugName][conc] = np.std(values)/np.sqrt(len(values))
-
-        print(nonSpecific)
-        print(totals)
-        print(results)
-        print(averages)
-        print(sem)
-
+        print(f"Non-Specific: {nonSpecific}")
+        print(f"Totals: {totals}")
+        print(f"All data: {results}")
+        print(f"Averages: {averages}")
+        print(f"SEM: {sem}")
 # guitools for displaying and manipulating new and saved BindingPlate        
 class BindingPlateGUI:
     def __init__(self, main, plate):

@@ -20,7 +20,6 @@ def read_raw_well_txt(filepath: str, outputClass: WellData):
             cell = str(rawData.iloc[i][col])
             match = re.search(datePattern, cell)
             if match:
-                print(match)
                 assayDate = match.group(0)              # return the first matched date
                 break
     # parse text file with regex to separate plates
