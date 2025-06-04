@@ -499,30 +499,34 @@ class HighlightAndBlockSelection(CellStyleResolver):
         parentLock = self.strategy.get_locked_cells() or {}
         if (row, col) in self.blockedCells:
             return CellStyle(fill="gray", stipple='gray50')
-        elif (row, col) in parentSelection:
+        if (row, col) in parentSelection:
             return CellStyle(fill="firebrick1")
-        elif (row, col) in parentLock:
+        if (row, col) in parentLock:
             return CellStyle(fill="dodger blue")
         return CellStyle
     
-class BlueWeighingSelection(HighlightAndLockSelection):
+class BlueWeighingSelection(HighlightAndBlockSelection):
 
     def get_cell_style(self, row, col):
         parentSelection = self.strategy.get_selected_cells() or {}
-        parentLock = self.strategy.get_locked_cells() or {}
+        parentLock = self.strategy.get_locked_cells() or {}     
+        if (row, col) in self.blockedCells:
+            return CellStyle(fill="gray", stipple='gray50')
         if (row, col) in parentSelection:
             return CellStyle(fill="Blue")
-        elif (row, col) in parentLock:
+        if (row, col) in parentLock:
             return CellStyle(fill="Blue", outline="dark slate gray")
         return CellStyle
         
-class BlackWeighingSelection(HighlightAndLockSelection):
+class BlackWeighingSelection(HighlightAndBlockSelection):
     def get_cell_style(self, row, col):
         parentSelection = self.strategy.get_selected_cells() or {}
         parentLock = self.strategy.get_locked_cells() or {}
+        if (row, col) in self.blockedCells:
+            return CellStyle(fill="gray", stipple='gray50')
         if (row, col) in parentSelection:
             return CellStyle(fill="gray10")
-        elif (row, col) in parentLock:
+        if (row, col) in parentLock:
             return CellStyle(fill="black")
         return CellStyle
     
@@ -614,6 +618,7 @@ class TriplicateGUI:
         self.unusedTriplets = set()
         self.unusedCells = set()
         self.assignedRows = set()
+        self.displayEntries = False
         self.selectionStrategy = MultiTripletSelector(self.selectedTriplets,
                                                       self.assignedTriplets)
         self.styleStrategy = HighlightAndLockSelection(self.selectionStrategy)
@@ -667,8 +672,8 @@ class TriplicateGUI:
         row, col = self.table.cell_from_event(event)
         self.selectionStrategy.on_release(row, col, event)
         self.table.draw_table(self.styleStrategy)
-
-    def load_receptor_gui(self):
+    
+    def confirm_unused_area(self):
         for trip in self.selectedTriplets:
             self.unusedTriplets.add(trip)
             self.plate.drugDict[trip] = None
@@ -678,6 +683,9 @@ class TriplicateGUI:
                 self.unusedCells.add(cell)
             #self.unusedCells.add([(i[0], col) for col in range(i[1], i[1] + 4)])
         self.confirmUnusedTriplicatesButton.pack_forget()
+
+    def load_receptor_gui(self):
+        self.confirm_unused_area()
         self.selectedRows = set()
         self.selectedTriplets = set()
         self.assignedTriplets = set()
@@ -787,9 +795,40 @@ class TriplicateGUI:
         self.receptorsConfirmButton.grid_forget()
         self.selectAllRowsButton.grid_forget()
 
+    def assign_weighings(self):
+        self.selectionStrategy = MultiTripletSelector(self.selectedTriplets, self.unusedTriplets)
+        self.styleStrategy = HighlightAndBlockSelection(self.unusedCells, self.selectionStrategy)
+        self.table = CustomTable(self.dataFrame, 
+                                       self.originalData, 
+                                       showData=False, 
+                                       cellStyle=self.styleStrategy)  
+        self.table.pack(expand=True, fill='both')
+        self.blueWeighingButton = tk.Button(self.entryFrame,
+                                            text="Select blue weighing",
+                                            command=self.assign_blue_weighing)
+        self.blackWeighingButton = tk.Button(self.entryFrame,
+                                             text="Select black weighing",
+                                             command=self.assign_black_weighing)
+        self.assignWeighingButton = tk.Button(self.entryFrame,
+                                              text="Assign experiment",
+                                              command=self.label_data)
+        self.blueWeighingButton.grid(row=0, column=0)
+        self.blackWeighingButton.grid(row=0, column=1)
+        self.assignWeighingButton.grid(row=1, column=0, columnspan=2)
+
     # confirm receptor assignment and proceed to triplicate
     def assign_receptors(self):
         self.unload_receptor_gui()
+        self.assign_weighings()
+        
+        #self.table.update_triplet(self.currentKey)
+
+    def label_data(self):
+        self.blueWeighingButton.grid_forget()
+        self.blackWeighingButton.grid_forget()
+        self.assignWeighingButton.grid_forget()
+        self.displayEntries = True
+        self.assign_triplicate_info()
         self.tree = ttk.Treeview(self.dataFrame, 
                                  columns=self.columns, 
                                  show="headings", 
@@ -799,16 +838,7 @@ class TriplicateGUI:
                                      height=1)
         self.saveTree.heading("#0", text="Drug Name")
         self.saveTree.heading("conc", text="Concentration")
-        self.selectionStrategy = SingleTripletSelector(self.selectedTriplets, self.unusedTriplets)
-        self.styleStrategy = HighlightAndBlockSelection(self.unusedCells, self.selectionStrategy)
-        self.table = CustomTable(self.dataFrame, 
-                                       self.originalData, 
-                                       showData=False, 
-                                       cellStyle=self.styleStrategy)  
-        self.assign_triplicate_info()   
-        self.table.pack(expand=True, fill='both')        
         tableWidth = self.table.get_pixel_width()
-
         self.saveTree.column("#0", width=tableWidth // 2)
         self.saveTree.column("conc", width=tableWidth // 2)
         for col in self.columns:
@@ -847,23 +877,11 @@ class TriplicateGUI:
                                       text="Save entries",
                                       command=self.cycle_data)
         self.changeButton.grid(row=2, column=1)
-        self.blueWeighingButton = tk.Button(self.entryFrame,
-                                            text="Assign blue weighing",
-                                            command=self.assign_blue_weighing)
-        self.blueWeighingButton.grid(row=3, column=0)
-        self.blackWeighingButton = tk.Button(self.entryFrame,
-                                             text="Assign black weighing",
-                                             command=self.assign_black_weighing)
-        self.blackWeighingButton.grid(row=3, column=1)
-        self.selectTriplicateButton = tk.Button(self.entryFrame,
-                                                text="Single triplicate selection",
-                                                command=self.assign_triplicate_info)
-        self.selectTriplicateButton.grid(row=3, column=2)
         self.currentKey = (0, 0)
         self.selectedTriplets.add(self.currentKey)
         self.table.draw_table(self.styleStrategy)
         self.select_triplicate(self.currentKey)
-        #self.table.update_triplet(self.currentKey)
+        pass
 
     # bound to mouse 1 when selecting triplicates
     def handle_trip_click(self, event):
@@ -896,7 +914,7 @@ class TriplicateGUI:
     def assign_blue_weighing(self):
         self.selectionStrategy = MultiTripletSelector(self.selectedTriplets,
                                                       self.assignedTriplets)
-        self.styleStrategy = BlueWeighingSelection(self.selectionStrategy)
+        self.styleStrategy = BlueWeighingSelection(self.unusedCells, self.selectionStrategy)
         self.table.configure_interaction_mode(allowDrag=True,
                                               cellStyle=self.styleStrategy,
                                               on_click=self.handle_trip_click,
@@ -907,7 +925,7 @@ class TriplicateGUI:
     def assign_black_weighing(self):
         self.selectionStrategy = MultiTripletSelector(self.selectedTriplets,
                                                       self.assignedTriplets)
-        self.styleStrategy = BlackWeighingSelection(self.selectionStrategy)
+        self.styleStrategy = BlackWeighingSelection(self.unusedCells, self.selectionStrategy)
         self.table.configure_interaction_mode(allowDrag=True,
                                               cellStyle=self.styleStrategy,
                                               on_click=self.handle_trip_click,
@@ -960,6 +978,8 @@ class TriplicateGUI:
         if key not in self.dataDict.keys():
             return False
         if key in self.unusedTriplets:
+            return False
+        if not self.displayEntries:
             return False
         self.currentKey = key
         tripData = self.dataDict[self.currentKey]
