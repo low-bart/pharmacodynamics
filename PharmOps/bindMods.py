@@ -36,7 +36,6 @@ class WellData:
     metadata = AssayMetadata()
     comments = []               # list
     data = []                   # well plate data
-    plateNo = []                # plate number from original assay
     omittedVals = []            # list of values from original well data that are omitted by user selection
 
     def __init__(self, df, plateNum=1):
