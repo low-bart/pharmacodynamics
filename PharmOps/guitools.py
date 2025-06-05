@@ -634,12 +634,14 @@ class TriplicateGUI:
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         self.dataDict = {}
+        self.screeningDict = {}
         self.nameRequired = True
         self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
         for rowIdx, row in plateData.iterrows():
             numCols = 4
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
+                self.screeningDict[rowIdx, triplicate] = ScreeningTriplet()
         self.table = CustomTable(self.dataFrame, 
                                              self.originalData, 
                                              showData=False, 
@@ -655,7 +657,7 @@ class TriplicateGUI:
                                                         text="Confirm unused triplicates",
                                                         command = self.load_receptor_gui)
         self.confirmUnusedTriplicatesButton.pack()
-
+        print(self.screeningDict)
     # bound to mouse 1 when selecting rows for receptors
     def handle_row_click(self, event):
         row, col = self.table.cell_from_event(event)
@@ -811,10 +813,14 @@ class TriplicateGUI:
                                              command=self.assign_black_weighing)
         self.assignWeighingButton = tk.Button(self.entryFrame,
                                               text="Assign experiment",
-                                              command=self.label_data)
+                                              command=self.confirm_weighing)
+        self.labelTriplicatesButton = tk.Button(self.entryFrame,
+                                                text="Label triplicates",
+                                                command=self.label_data)
         self.blueWeighingButton.grid(row=0, column=0)
         self.blackWeighingButton.grid(row=0, column=1)
-        self.assignWeighingButton.grid(row=1, column=0, columnspan=2)
+        self.assignWeighingButton.grid(row=1, column=0)
+        self.labelTriplicatesButton.grid(row=1, column=1)
 
     # confirm receptor assignment and proceed to triplicate
     def assign_receptors(self):
@@ -827,6 +833,7 @@ class TriplicateGUI:
         self.blueWeighingButton.grid_forget()
         self.blackWeighingButton.grid_forget()
         self.assignWeighingButton.grid_forget()
+        self.labelTriplicatesButton.grid_forget()
         self.displayEntries = True
         self.assign_triplicate_info()
         self.tree = ttk.Treeview(self.dataFrame, 
@@ -853,16 +860,21 @@ class TriplicateGUI:
                                      value = -7,
                                      command = self.enable_entries)
         self.radio2 = tk.Radiobutton(self.entryFrame,
+                                     text="1 μM",
+                                     variable=self.concentrationVal,
+                                     value = -6,
+                                     command = self.enable_entries)
+        self.radio3 = tk.Radiobutton(self.entryFrame,
                                      text="10 μM",
                                      variable=self.concentrationVal,
                                      value = -5,
                                      command = self.enable_entries)
-        self.radio3 = tk.Radiobutton(self.entryFrame,
+        self.radioNSB = tk.Radiobutton(self.entryFrame,
                                      text="Non-specific",
                                      variable=self.concentrationVal,
                                      value = 0,
                                      command = self.disable_entries)
-        self.radio4 = tk.Radiobutton(self.entryFrame,
+        self.radioTotals = tk.Radiobutton(self.entryFrame,
                                      text="Totals",
                                      variable=self.concentrationVal,
                                      value=1,
@@ -870,18 +882,20 @@ class TriplicateGUI:
         self.radio1.grid(row=0, column=0)
         self.radio2.grid(row=0, column=1)
         self.radio3.grid(row=0, column=2)
-        self.radio4.grid(row=0, column=3)
+        self.radioNSB.grid(row=1, column=0, sticky='E')
+        self.radioTotals.grid(row=1, column=2, sticky='W')
         self.triplicateEntry = tk.Entry(self.entryFrame)
-        self.triplicateEntry.grid(row=1, column=1)
+        self.triplicateEntry.grid(row=2, column=1)
         self.changeButton = tk.Button(self.entryFrame,
                                       text="Save entries",
                                       command=self.cycle_data)
-        self.changeButton.grid(row=2, column=1)
+        self.changeButton.grid(row=3, column=1)
         self.currentKey = (0, 0)
         self.selectedTriplets.add(self.currentKey)
-        self.table.draw_table(self.styleStrategy)
+        while self.currentKey in self.unusedTriplets:
+            self.select_next_triplicate()
         self.select_triplicate(self.currentKey)
-        pass
+        self.table.draw_table(self.styleStrategy)
 
     # bound to mouse 1 when selecting triplicates
     def handle_trip_click(self, event):
@@ -902,6 +916,7 @@ class TriplicateGUI:
         self.table.draw_table(self.styleStrategy)     
    
     def assign_triplicate_info(self):
+        self.selectedTriplets = set()
         self.selectionStrategy = SingleTripletSelector(self.selectedTriplets, self.unusedTriplets)
         self.styleStrategy = HighlightAndBlockSelection(self.unusedCells, self.selectionStrategy)
         self.table.configure_interaction_mode(allowDrag=False, 
@@ -921,6 +936,7 @@ class TriplicateGUI:
                                               on_drag=self.handle_trip_drag,
                                               on_release=self.handle_trip_release)
         self.reset_triplets()
+        self.currentWeighing = 'blue'
 
     def assign_black_weighing(self):
         self.selectionStrategy = MultiTripletSelector(self.selectedTriplets,
@@ -932,10 +948,15 @@ class TriplicateGUI:
                                               on_drag=self.handle_trip_drag,
                                               on_release=self.handle_trip_release)
         self.reset_triplets()
-        
+        self.currentWeighing = 'black'
+
+    def confirm_weighing(self):
+        for trip in self.selectedTriplets:
+            if trip not in self.unusedTriplets:
+                self.screeningDict[trip].weighing = self.currentWeighing
+
     def reset_triplets(self):
         self.selectedTriplets.clear()
-        self.assignedTriplets.clear()
         self.table.draw_table(self.styleStrategy)
 
     # used if there is a concentration of drug
@@ -948,26 +969,27 @@ class TriplicateGUI:
         self.nameRequired = False
         self.triplicateEntry["state"] = "disabled"
 
+    def select_next_triplicate(self):
+        rowIdx = self.currentKey[0]
+        tripIdx = self.currentKey[1]
+        if tripIdx >= 3:
+            tripIdx = 0
+            rowIdx += 1
+        else:
+            tripIdx += 1
+        if rowIdx > 7:
+            rowIdx = 0
+        self.currentKey = (rowIdx, tripIdx)
+        self.selectedTriplets.clear()
+        self.selectedTriplets.add(self.currentKey)
+
     # adds entered information to table and selects next triplicate
     def cycle_data(self):
-        def select_next_triplicate():
-            rowIdx = self.currentKey[0]
-            tripIdx = self.currentKey[1]
-            if tripIdx >= 3:
-                tripIdx = 0
-                rowIdx += 1
-            else:
-                tripIdx += 1
-            if rowIdx > 7:
-                rowIdx = 0
-            self.currentKey = (rowIdx, tripIdx)
-            self.selectedTriplets.clear()
-            self.selectedTriplets.add(self.currentKey)
         if not self.update_current_triplicate(self.currentKey[0], self.currentKey[1]):
             return
-        select_next_triplicate()
+        self.select_next_triplicate()
         while not self.select_triplicate(self.currentKey):
-            select_next_triplicate()
+            self.select_next_triplicate()
         self.table.draw_table(self.styleStrategy)
         self.screening_calculation()
         self.enable_entries()
@@ -995,6 +1017,7 @@ class TriplicateGUI:
                                  text=self.plate.drugDict[self.currentKey],
                                  values=[self.plate.concDict[self.currentKey]])
         return True
+    
     # confirmation of proper field entries in cycle_data
     def update_current_triplicate(self, rowIdx, tripIdx):
         if self.nameRequired:
@@ -1020,6 +1043,10 @@ class TriplicateGUI:
                 concVal = "Totals"
         self.plate.drugDict[self.currentKey] = drugName
         self.plate.concDict[self.currentKey] = concVal
+        self.screeningDict[(rowIdx, tripIdx)].receptor = self.receptorByRow[rowIdx]
+        self.screeningDict[(rowIdx, tripIdx)].drug = drugName
+        self.screeningDict[(rowIdx, tripIdx)].concentration = concVal
+        self.screeningDict[(rowIdx, tripIdx)].plate = self.plate.plateNo
         return 1
 
     # deprecated but right idea - logic needs to move to h5/json/external storage
@@ -1047,9 +1074,11 @@ class TriplicateGUI:
             if conc not in results[receptor][drugName]:
                 results[receptor][drugName][conc] = []
             results[receptor][drugName][conc].append([val for val in data])
+        print(f"All data: {results}")
         for receptor, drugs in results.items():
             for drugName, concentrations in drugs.items():
                 if drugName == "None":
+                    print(concentrations)
                     nonSpecific[receptor] = np.mean(concentrations["Non Specific"])
                     totals[receptor] = np.mean(concentrations["Totals"])
                     continue
@@ -1058,10 +1087,11 @@ class TriplicateGUI:
                     sem[receptor][drugName][conc] = np.std(values)/np.sqrt(len(values))
         print(f"Non-Specific: {nonSpecific}")
         print(f"Totals: {totals}")
-        print(f"All data: {results}")
         print(f"Averages: {averages}")
         print(f"SEM: {sem}")
-
+        for key in self.screeningDict:
+            print(self.screeningDict[key])
+        #print(f"Screening dictionary: {self.screeningDict}")
 # guitools for displaying and manipulating new and saved BindingPlate        
 class BindingPlateGUI:
     def __init__(self, main, plate):

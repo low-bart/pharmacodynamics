@@ -8,6 +8,7 @@ import pandas as pd
 import xlwings as xw
 import traceback
 import os
+from dataclasses import dataclass
 
 # This class is intended to synchronize WellData and corresponding DrugReports metadata
 class AssayMetadata:
@@ -146,6 +147,14 @@ class DrugReports:
         self.average = self.average[0].tolist()
         self.specific = self.specific[0].tolist()
         self.pctTotal = self.pctTotal[0].tolist()
+
+@dataclass
+class ScreeningTriplet:
+    receptor: str = None
+    drug: str = None
+    concentration: int = None
+    weighing: str = None
+    plate: int = None
 
 # Unsure where this class is going - potentially a simple aggregator that calculates % inhib for screening assays
 class TriplicateScreen:
