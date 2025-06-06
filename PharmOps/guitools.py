@@ -1293,7 +1293,7 @@ class DrugReportsGUI:
                 currentDrugReport.pctTotal[i]
             ))
 
-# used to create excel templates for nida/dea assays
+# used to create excel templates for assays
 class TemplateGUI:
     def __init__(self, main):
         self.main = main
