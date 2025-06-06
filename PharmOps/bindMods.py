@@ -106,12 +106,16 @@ class ScreeningPlate(WellData):
         self.drugDict = {}
         self.concDict = {}
         self.experimentIdx = {}
+        self.screeningDict = {}
 
     def display(self):
         super().display()
         
-    def make_triplicate_reports(self):
-        pass
+    def get_triplicate_data(self, key):
+        row = key[0]
+        triplicate = key[1]
+        data = self.data.iloc[row, 0 + triplicate*3:3 + triplicate*3].to_list()
+        return data
 
 # Stores assay for one drug/receptor/date combination
 class DrugReports:

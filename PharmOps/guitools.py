@@ -643,14 +643,13 @@ class TriplicateGUI:
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         self.dataDict = {}
-        self.screeningDict = {}
         self.nameRequired = True
         self.originalData = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
         for rowIdx, row in plateData.iterrows():
             numCols = 4
             for triplicate in range(0, numCols):
                 self.dataDict[rowIdx, triplicate] = row.iloc[0 + triplicate*3:3 + triplicate*3].to_list()
-                self.screeningDict[rowIdx, triplicate] = ScreeningTriplet()
+                self.plate.screeningDict[rowIdx, triplicate] = ScreeningTriplet()
         self.table = CustomTable(self.dataFrame, 
                                              self.originalData, 
                                              showData=False, 
@@ -688,7 +687,7 @@ class TriplicateGUI:
             self.unusedTriplets.add(trip)
             self.plate.drugDict[trip] = None
             self.plate.concDict[trip] = None
-            self.screeningDict[trip] = None
+            self.plate.screeningDict[trip] = None
             selectedCells = [(trip[0], col) for col in range(trip[1]*3, trip[1]*3 + 3)]
             for cell in selectedCells:
                 self.unusedCells.add(cell)
@@ -867,7 +866,7 @@ class TriplicateGUI:
     def confirm_weighing(self):
         for trip in self.selectedTriplets:
             if trip not in self.unusedTriplets:
-                self.screeningDict[trip].weighing = self.currentWeighing
+                self.plate.screeningDict[trip].weighing = self.currentWeighing
         self.reset_triplets()
         self.blackWeighingButton["state"] = "normal"
         self.blueWeighingButton["state"] = "normal"
@@ -929,12 +928,19 @@ class TriplicateGUI:
         self.radio3.grid(row=0, column=2)
         self.radioNSB.grid(row=1, column=0, sticky='E')
         self.radioTotals.grid(row=1, column=2, sticky='W')
+        self.triplicateLabel = tk.Label(self.entryFrame,
+                                        text="Enter drug name:")
+        self.triplicateLabel.grid(row=2, column=0)
         self.triplicateEntry = tk.Entry(self.entryFrame)
         self.triplicateEntry.grid(row=2, column=1)
         self.changeButton = tk.Button(self.entryFrame,
                                       text="Save entries",
                                       command=self.cycle_data)
-        self.changeButton.grid(row=3, column=1)
+        self.changeButton.grid(row=3, column=0)
+        self.screeningCompleteButton = tk.Button(self.entryFrame,
+                                                 text="Save data to file",
+                                                 command=self.save_triplicate_screening)
+        self.screeningCompleteButton.grid(row=3, column=2)
         self.currentKey = (0, 0)
         self.selectedTriplets.add(self.currentKey)
         while self.currentKey in self.unusedTriplets:
@@ -1031,7 +1037,7 @@ class TriplicateGUI:
         if self.currentKey in self.plate.concDict and self.currentKey in self.plate.drugDict:
             self.saveTree.insert("", "end", 
                                  text=self.plate.drugDict[self.currentKey],
-                                 values=[self.plate.concDict[self.currentKey], self.screeningDict[self.currentKey].weighing])
+                                 values=[self.plate.concDict[self.currentKey], self.plate.screeningDict[self.currentKey].weighing])
         return True
     
     # confirmation of proper field entries in cycle_data
@@ -1059,11 +1065,22 @@ class TriplicateGUI:
                 concVal = "Totals"
         self.plate.drugDict[self.currentKey] = drugName
         self.plate.concDict[self.currentKey] = concVal
-        self.screeningDict[self.currentKey].receptor = self.receptorByRow[self.currentKey[0]]
-        self.screeningDict[self.currentKey].drug = drugName
-        self.screeningDict[self.currentKey].concentration = concVal
-        self.screeningDict[self.currentKey].plate = self.plate.metadata.plateNo
+        self.plate.screeningDict[self.currentKey].receptor = self.receptorByRow[self.currentKey[0]]
+        self.plate.screeningDict[self.currentKey].drug = drugName
+        self.plate.screeningDict[self.currentKey].concentration = concVal
+        self.plate.screeningDict[self.currentKey].plate = self.plate.metadata.plateNo
         return 1
+
+    def save_triplicate_screening(self):
+        dateStr = self.plate.metadata.date
+        plateNo = self.plate.metadata.plateNo
+        if not all(x in self.plate.drugDict for x in self.dataDict):
+            print("Incomplete")
+        for key, metadata in self.plate.screeningDict.items():
+            if metadata is None:
+                continue
+            #print(f"Unique triplet hash: {'|'.join([dateStr,plateNo,key,metadata.weighing])}")
+        io.save_new_screening_plate(self.plate, r"E:/Test/test.h5")
 
     # deprecated but right idea - logic needs to move to h5/json/external storage
     # need a good way to divide experiments by identifiers
@@ -1105,8 +1122,8 @@ class TriplicateGUI:
         print(f"Totals: {totals}")
         print(f"Averages: {averages}")
         print(f"SEM: {sem}")
-        for key in self.screeningDict:
-            tripletObj = self.screeningDict[key]
+        for key in self.plate.screeningDict:
+            tripletObj = self.plate.screeningDict[key]
             if tripletObj is not None:
                 print(f"Row {key[0] + 1}, Col {key[1] + 1}: {tripletObj}")
                 
@@ -1119,11 +1136,6 @@ class BindingPlateGUI:
         self.plate = plate
         plateData = plate.data.reset_index(drop=True)
         dataDict = {(rowIdx, colIdx): value for rowIdx, row in plateData.iterrows() for colIdx, value in enumerate(row)}
-        #dataDict = plate.data.to_dict(orient='index')
-        #dataDict = {rowKey: {str(colKey): value for colKey, value in colValues.items()} for rowKey, colValues in dataDict.items()}
-        #self.model = TableModel()
-        #self.model.importDict(dataDict)
-        #self.frame.grid(row=0, column=0, columnspan=4, sticky="N, E, W")
 
         self.dataFrame.pack(fill="both", expand="yes")
         self.entryFrame.pack(fill="both", expand="yes")
@@ -1137,12 +1149,6 @@ class BindingPlateGUI:
                                              cellStyle=self.styleStrategy)
         self.table.canvas.bind("<Button-1>", self.handle_click)
         self.table.pack(expand=True, fill='both')
-
-
-
-
-        #self.table = TableCanvas(self.dataFrame, model=self.model, read_only=True)
-        #self.table.show()
         self.main.after(100, self.adjust_window_width)
         self.drugLabels = ["Drug 1: ", "Drug 2: ", "Drug 3: ", "Drug 4: "]
         self.drugEntries = []
