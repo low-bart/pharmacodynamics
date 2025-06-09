@@ -161,15 +161,21 @@ class ScreeningTriplet:
 
 # Unsure where this class is going - potentially a simple aggregator that calculates % inhib for screening assays
 class TriplicateScreen:
-    def __init__(self, vals, metadata, nsb, totals):
-        self.values = vals
-        self.metadata = metadata
-        self.nsb = np.mean(nsb)
-        self.totals = np.mean(totals)
+    def __init__(self, expDict):
+        self.expDict = expDict
+        self.pctInhibition = []
+        for key in expDict:
+            vals = np.mean(expDict[key]['vals'])
+            nsb = np.mean(expDict[key]['nsb'])
+            totals = np.mean(expDict[key]['totals'])
+            specific = vals - nsb
+            totalSpecific = totals - nsb
+            pctTotal = specific*100/totalSpecific
+            pctInhib = 100 - pctTotal
+            self.pctInhibition.append(pctInhib)
+        self.averageVals = np.mean(self.pctInhibition)
+        self.sem = np.std(self.pctInhibition)/np.sqrt(len(self.pctInhibition))
 
-    def calculate_totals(self):
-        specificActivity = np.mean(self.values) - self.nsb
-        totalSpecific = np.mean(self.totals) - self.nsb
         
 # Produces summary tables for NIDA reports
 class SummaryTable:

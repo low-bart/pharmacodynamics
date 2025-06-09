@@ -32,12 +32,16 @@ class BindingGUI:
         self.labelTriplicatesButton = tk.Button(self.frame,
                                                 text="Label triplicate data",
                                                 command=self.parse_triplicates)
+        self.screeningResultsButton = tk.Button(self.frame,
+                                                text="Calculate screening results",
+                                                command=self.calculate_trip_screen)
         self.newBindingPlateButton.pack()
         self.loadBindingPlateButton.pack()
         self.loadDrugReportsButton.pack()
         self.generateSummaryTableButton.pack()
         self.generateTemplateButton.pack()
         self.labelTriplicatesButton.pack()
+        self.screeningResultsButton.pack()
         
     # creates new window to verify user
     def get_user_info(self):
@@ -223,6 +227,15 @@ class BindingGUI:
         newWindow = tk.Toplevel(self.main)
         TriplicateGUI(newWindow, plate)
         self.main.wait_window(newWindow)
+
+    def calculate_trip_screen(self):
+        fileName = filedialog.askopenfilename(
+            initialdir="~",
+            title='Select a file',
+            filetypes=[("AllowedTypes",
+                        "*.h5")])
+        newWindow = tk.Toplevel(self.main)
+        ScreeningGUI(newWindow, fileName)
 
 # abstract base class to inherit modes of cell selection from
 class SelectionStrategy(ABC):
@@ -928,17 +941,17 @@ class TriplicateGUI:
         self.saveTree.pack(expand=True, fill='both')
         self.concentrationVal = tk.IntVar()
         self.radio1 = tk.Radiobutton(self.entryFrame,
-                                     text="100 nM",
+                                     text="100 nM (-7)",
                                      variable=self.concentrationVal,
                                      value = -7,
                                      command = self.enable_entries)
         self.radio2 = tk.Radiobutton(self.entryFrame,
-                                     text="1 μM",
+                                     text="1 μM (-6)",
                                      variable=self.concentrationVal,
                                      value = -6,
                                      command = self.enable_entries)
         self.radio3 = tk.Radiobutton(self.entryFrame,
-                                     text="10 μM",
+                                     text="10 μM (-5)",
                                      variable=self.concentrationVal,
                                      value = -5,
                                      command = self.enable_entries)
@@ -1029,7 +1042,6 @@ class TriplicateGUI:
         while not self.select_triplicate(self.currentKey):
             self.select_next_triplicate()
         self.table.draw_table(self.styleStrategy)
-        print(self.selectedTriplets)
         self.screening_calculation()
         self.enable_entries()
 
@@ -1143,6 +1155,73 @@ class TriplicateGUI:
             if tripletObj is not None:
                 print(f"Row {key[0] + 1}, Col {key[1] + 1}: {tripletObj}")
                 
+class ScreeningGUI:
+    def __init__(self, main, filepath):
+        self.main = main
+        self.h5Path = filepath
+        self.h5File = h5py.File(self.h5Path, "r")
+        self.trips = self.h5File["screenings"]["triplicates"]
+        self.plates = self.h5File["screenings"]["plates"]
+        self.drugs = list(self.trips.keys())
+        self.dataset = {drug: self.trips[drug] for drug in self.drugs}
+        self.drugLabel = tk.Label(self.main, text="Select a drug: ")
+        self.drugLabel.grid(row=0, column=0, sticky="NEW")
+        self.drugSelected = tk.StringVar()
+        self.drugDrop = ttk.Combobox(self.main, textvariable=self.drugSelected, values=self.drugs)
+        self.drugDrop.grid(row=0, column=1, sticky="NW")
+        self.receptorLabel = tk.Label(self.main, text="Select a receptor: ")
+        self.receptorLabel.grid(row=1, column=0, sticky="NEW")
+        self.receptorClicked = tk.StringVar()
+        self.receptorDrop = ttk.Combobox(self.main, textvariable=self.receptorClicked)
+        self.receptorDrop.grid(row=1, column=1, sticky="NW")
+        self.dateLabel = tk.Label(self.main, text="Select an assay date: ")
+        self.dateLabel.grid(row=2, column=0, sticky="NEW")
+        self.dateSelected = tk.StringVar()
+        self.concDrop = ttk.Combobox(self.main, textvariable=self.dateSelected)
+        self.concDrop.grid(row=2, column=1, sticky="NW")
+        self.drugDrop.bind("<<ComboboxSelected>>", lambda event: self.update_receptors(event))
+        self.receptorDrop.bind("<<ComboboxSelected>>", lambda event: self.update_dates(event))
+        self.concDrop.bind("<<ComboboxSelected>>", lambda event: self.update_Screening_GUI(event))
+        self.columns = ["Average", "SEM"]
+        self.tree = ttk.Treeview(self.main, columns=self.columns, show="headings")
+        for col in self.columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=80, anchor="center")
+        self.tree.grid(row=3, column=0, columnspan=3, sticky="E, W")
+        self.main.grid_columnconfigure(0, weight=1)
+
+    def update_receptors(self, event):
+        self.selectedDrug = self.drugDrop.get()
+        if self.selectedDrug:
+            receptorKeys = list(self.dataset[self.selectedDrug].keys())
+            if "None" in receptorKeys:
+                #pass
+                receptorKeys.remove("None")
+            self.receptorDrop['values'] = receptorKeys
+            self.receptorDrop.set('')
+        else:
+            print("No drug selected.")
+
+    def update_dates(self, event):
+        self.selectedReceptor = self.receptorDrop.get()
+        if self.selectedReceptor:
+            dateKeys = list(self.dataset[self.selectedDrug][self.selectedReceptor].keys())
+            self.concDrop['values'] = dateKeys
+            self.concDrop.set('')
+        else:
+            print("No date selected")
+    
+    def update_Screening_GUI(self, event):
+        selectedConc = self.concDrop.get()
+        allScreens = io.load_h5_triplicates(self.selectedDrug, self.selectedReceptor, selectedConc, self.h5File)
+        calculations = TriplicateScreen(allScreens)
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        self.tree.insert("", "end", values=(
+            calculations.averageVals,
+            calculations.sem))
+            
+
 # guitools for displaying and manipulating new and saved BindingPlate        
 class BindingPlateGUI:
     def __init__(self, main, plate):
@@ -1273,7 +1352,7 @@ class DrugReportsGUI:
         self.drugDrop.bind("<<ComboboxSelected>>", lambda event: self.update_receptors(event))
         self.receptorDrop.bind("<<ComboboxSelected>>", lambda event: self.update_dates(event))
         self.dateDrop.bind("<<ComboboxSelected>>", lambda event: self.update_DrugReports_GUI(event))
-        self.columns = ["Average", "Specific", "[Drug]", "Log [Drug]", "Pct Total"]
+        self.columns = ["Average", "SEM", "[Drug]", "Log [Drug]", "Pct Total"]
         self.tree = ttk.Treeview(self.main, columns=self.columns, show="headings")
         for col in self.columns:
             self.tree.heading(col, text=col)

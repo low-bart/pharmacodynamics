@@ -124,15 +124,15 @@ def save_new_screening_plate(plate: ScreeningPlate,
             receptor = metadata.receptor
             concentration = str(metadata.concentration)
             weighing = metadata.weighing
-            plateHash = '+'.join([parsedDate, plate.metadata.plateNo, weighing, str(idx)])
+            plateHash = '+'.join([parsedDate, plate.metadata.plateNo, weighing])
             tripData = plate.get_triplicate_data(idx)
-            
+            tripIdx = str(idx)
             if type(metadata.concentration) is not int:
-                tripContainer = tripletGroup.require_group(f"{receptor}/{metadata.concentration}")
-                tripContainer.create_dataset(plateHash, data=tripData)
+                tripContainer = tripletGroup.require_group(f"None/{receptor}/{metadata.concentration}/{plateHash}")
+                tripContainer.create_dataset(tripIdx, data=tripData)
             else:
-                tripContainer = tripletGroup.require_group(f"{drugName}/{receptor}/{concentration}")
-                tripContainer.create_dataset(plateHash, data=tripData)
+                tripContainer = tripletGroup.require_group(f"{drugName}/{receptor}/{concentration}/{plateHash}")
+                tripContainer.create_dataset(tripIdx, data=tripData)
         plateGroup.create_dataset(plateID, data=serializedArray)
 
 # this saves the drug receptor combo's reference to plate hash
@@ -141,6 +141,32 @@ def save_new_triplicate_assay(plate: ScreeningPlate,
                               filepath: str):
     serializedArray = prepare_binary(triplet)
     
+def load_h5_triplicates(drugName, receptorName, concentration, h5file):
+    triplicates = h5file['screenings']['triplicates']
+    if drugName not in triplicates:
+        raise KeyError(f"No drug '{drugName}' found in h5 file")
+    if receptorName not in triplicates[drugName]:
+        raise KeyError(f"No receptor '{receptorName}' data found for '{drugName}'")
+    if concentration not in triplicates[drugName][receptorName]:
+        raise KeyError(f"No assay at '{concentration}' concentration for drug '{drugName}' and receptor '{receptorName}'")
+    allMatches = triplicates[drugName][receptorName][concentration]
+    allKeys = list(allMatches.keys())
+    experiments = {}
+    for key in allKeys:
+        if key not in experiments:
+            experiments[key] = {'vals': [], 'nsb': [], 'totals': []}
+        allTrips = allMatches[key].keys()
+        for trip in list(allTrips):
+            experiments[key]['vals'].append(allMatches[key][trip][:])
+        nsb = triplicates["None"][receptorName]["Non Specific"]
+        nsbTrips = nsb[key]
+        for trip in list(nsbTrips):
+            experiments[key]['nsb'].append(nsbTrips[trip][:])
+        totals = triplicates["None"][receptorName]["Totals"]
+        totalsTrips = totals[key]
+        for trip in list(totalsTrips):
+            experiments[key]['totals'].append(totalsTrips[trip][:])
+    return experiments
 
 # load existing DrugReports from h5 via unserializing 
 def load_h5_DrugReports(drugName, receptorName, dateStr, filepath):
