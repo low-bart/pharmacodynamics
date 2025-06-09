@@ -118,7 +118,7 @@ def save_new_screening_plate(plate: ScreeningPlate,
         plateGroup = h5file.require_group("screenings/" + "plates/" + plateID)
         tripletGroup = h5file.require_group("screenings/" + "triplicates/")
         for idx, metadata in plate.screeningDict.items():
-            if metadata is None or type(metadata.concentration) is not int:
+            if metadata is None:
                 continue
             drugName = metadata.drug
             receptor = metadata.receptor
@@ -126,8 +126,13 @@ def save_new_screening_plate(plate: ScreeningPlate,
             weighing = metadata.weighing
             plateHash = '+'.join([parsedDate, plate.metadata.plateNo, weighing, str(idx)])
             tripData = plate.get_triplicate_data(idx)
-            tripContainer = tripletGroup.require_group(f"{drugName}/{receptor}/{concentration}")
-            tripContainer.create_dataset(plateHash, data=tripData)
+            
+            if type(metadata.concentration) is not int:
+                tripContainer = tripletGroup.require_group(f"{receptor}/{metadata.concentration}")
+                tripContainer.create_dataset(plateHash, data=tripData)
+            else:
+                tripContainer = tripletGroup.require_group(f"{drugName}/{receptor}/{concentration}")
+                tripContainer.create_dataset(plateHash, data=tripData)
         plateGroup.create_dataset(plateID, data=serializedArray)
 
 # this saves the drug receptor combo's reference to plate hash

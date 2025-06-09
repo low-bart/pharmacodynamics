@@ -517,7 +517,7 @@ class BlueWeighingSelection(HighlightAndBlockSelection):
             return CellStyle(fill="Blue")
         if (row, col) in parentLock:
             return CellStyle(fill="Blue", outline="dark slate gray")
-        return CellStyle
+        return CellStyle(fill="firebrick1")
         
 class BlackWeighingSelection(HighlightAndBlockSelection):
     def get_cell_style(self, row, col):
@@ -528,8 +528,8 @@ class BlackWeighingSelection(HighlightAndBlockSelection):
         if (row, col) in parentSelection:
             return CellStyle(fill="gray10")
         if (row, col) in parentLock:
-            return CellStyle(fill="black")
-        return CellStyle
+            return CellStyle(fill="black", outline="dark slate gray")
+        return CellStyle(fill="firebrick1")
     
 # Allows for custom behavior in tabular data like cell selection and highlighting
 class CustomTable(tk.Frame):
@@ -556,10 +556,12 @@ class CustomTable(tk.Frame):
                                 height=self.cellHeight*self.numRows, 
                                 width=self.cellWidth*self.numColumns)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-        self.bindings = {}
         self.data = data
-        self.cellStyle = cellStyle
-        self.draw_table(self.cellStyle)
+        self.bindings = {}
+        self.styles = {}
+        for (row, col), value in self.data.items():
+            self.styles[(row, col)] = None
+        self.draw_table(cellStyle)
     
     # controls bindings via passing SelectionStrategy methods in
     def configure_interaction_mode(self, 
@@ -569,7 +571,6 @@ class CustomTable(tk.Frame):
                                    on_drag=None, 
                                    on_release=None):
         self.unbind_all_mouse_events()
-        self.cellStyle = cellStyle
         if on_click:
             self.bindings["<Button-1>"] = self.canvas.bind("<Button-1>", on_click)
         if allowDrag and on_drag:
@@ -588,7 +589,11 @@ class CustomTable(tk.Frame):
             # should be uncommented when a solution is found for blending cell styles
             #if (row, col) in styleResolver.strategy.get_locked_cells():
             #    continue
-            self.draw_cell(row, col, styleResolver)
+            savedStyle = self.styles[(row, col)]
+            if savedStyle is None:
+                self.draw_cell(row, col, styleResolver)
+            else:
+                self.draw_cell(row, col, savedStyle)
 
     def draw_cell(self, row, col, styleResolver):
         x1 = col * self.cellWidth
@@ -618,6 +623,12 @@ class CustomTable(tk.Frame):
     def get_pixel_width(self):
         return self.numColumns * self.cellWidth
     
+    def lock_cell_style(self, row, col, style):
+        self.styles[(row, col)] = style
+
+    def unlock_cell_style(self, row, col):
+        self.styles[(row, col)] = None
+
 # allows for manual entry of triplicate data and concentrations
 class TriplicateGUI:
     def __init__(self, main, plate: ScreeningPlate):
@@ -865,11 +876,29 @@ class TriplicateGUI:
 
     def confirm_weighing(self):
         for trip in self.selectedTriplets:
-            if trip not in self.unusedTriplets:
+            if trip not in self.unusedTriplets and trip not in self.assignedTriplets:
                 self.plate.screeningDict[trip].weighing = self.currentWeighing
+                self.assignedTriplets.add(trip)
+                for col in range(trip[1]*3, trip[1]*3+3):
+                    self.table.lock_cell_style(trip[0], col, self.styleStrategy)
         self.reset_triplets()
         self.blackWeighingButton["state"] = "normal"
         self.blueWeighingButton["state"] = "normal"
+   
+    def assign_triplicate_info(self):
+        self.selectedTriplets = set()
+        self.selectionStrategy = SingleTripletSelector(self.selectedTriplets, self.unusedTriplets)
+        self.styleStrategy = HighlightAndBlockSelection(self.unusedCells, self.selectionStrategy)
+        self.table.configure_interaction_mode(allowDrag=False, 
+                                              cellStyle=self.styleStrategy,
+                                              on_click=self.handle_trip_click,
+                                              on_drag=self.handle_trip_drag,
+                                              on_release=self.handle_trip_release)
+        self.reset_triplets()
+
+    def reset_triplets(self):
+        self.selectedTriplets.clear()
+        self.table.draw_table(self.styleStrategy)
 
     def label_data(self):
         self.blueWeighingButton.grid_forget()
@@ -965,21 +994,6 @@ class TriplicateGUI:
         row, col = self.table.cell_from_event(event)
         self.selectionStrategy.on_release(row, col, event)
         self.table.draw_table(self.styleStrategy)     
-   
-    def assign_triplicate_info(self):
-        self.selectedTriplets = set()
-        self.selectionStrategy = SingleTripletSelector(self.selectedTriplets, self.unusedTriplets)
-        self.styleStrategy = HighlightAndBlockSelection(self.unusedCells, self.selectionStrategy)
-        self.table.configure_interaction_mode(allowDrag=False, 
-                                              cellStyle=self.styleStrategy,
-                                              on_click=self.handle_trip_click,
-                                              on_drag=self.handle_trip_drag,
-                                              on_release=self.handle_trip_release)
-        self.reset_triplets()
-
-    def reset_triplets(self):
-        self.selectedTriplets.clear()
-        self.table.draw_table(self.styleStrategy)
 
     # used if there is a concentration of drug
     def enable_entries(self):
@@ -1010,10 +1024,12 @@ class TriplicateGUI:
     def cycle_data(self):
         if not self.update_current_triplicate():
             return
+        self.assignedTriplets.add(self.currentKey)
         self.select_next_triplicate()
         while not self.select_triplicate(self.currentKey):
             self.select_next_triplicate()
         self.table.draw_table(self.styleStrategy)
+        print(self.selectedTriplets)
         self.screening_calculation()
         self.enable_entries()
 
@@ -1025,6 +1041,10 @@ class TriplicateGUI:
             return False
         if not self.displayEntries:
             return False
+        if self.currentKey not in self.assignedTriplets:
+            self.assignedTriplets.add(self.currentKey)
+        if key in self.assignedTriplets:
+            self.assignedTriplets.remove(key)
         self.currentKey = key
         tripData = self.dataDict[self.currentKey]
         self.triplicateEntry.delete(0, tk.END)
@@ -1054,10 +1074,6 @@ class TriplicateGUI:
         except:
             print("Select a concentration")
             return 0
-        try:
-            concVal = self.concentrationVal.get()
-        except:
-            concVal = None
         match(concVal):
             case 0:
                 concVal = "Non Specific"
