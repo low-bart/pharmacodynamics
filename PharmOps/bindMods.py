@@ -159,7 +159,7 @@ class ScreeningTriplet:
     weighing: str = None
     plate: int = None
 
-# Unsure where this class is going - potentially a simple aggregator that calculates % inhib for screening assays
+# calculates % inhib for screening assays (expDict from io.load_h5_triplicates)
 class TriplicateScreen:
     def __init__(self, expDict):
         self.expDict = expDict
@@ -175,8 +175,7 @@ class TriplicateScreen:
             self.pctInhibition.append(pctInhib)
         self.averageVals = np.mean(self.pctInhibition)
         self.sem = np.std(self.pctInhibition)/np.sqrt(len(self.pctInhibition))
-
-        
+      
 # Produces summary tables for NIDA reports
 class SummaryTable:
     receptors = ["D1", "D2", "D3", "D4", 

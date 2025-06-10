@@ -81,6 +81,7 @@ def convert_date_string(dateStr):
     parsedDate = parsedDate.strftime("%Y%m%d")
     return parsedDate
 
+# sanitize input for pickling
 def prepare_binary(obj):
     serializedObj = pickle.dumps(obj)
     serializedArray = np.frombuffer(serializedObj, dtype='uint8')
@@ -140,7 +141,8 @@ def save_new_triplicate_assay(plate: ScreeningPlate,
                               triplet: tuple, 
                               filepath: str):
     serializedArray = prepare_binary(triplet)
-    
+
+# returnes expDict for making a TriplicateScreen object   
 def load_h5_triplicates(drugName, receptorName, concentration, h5file):
     triplicates = h5file['screenings']['triplicates']
     if drugName not in triplicates:
@@ -186,6 +188,7 @@ def find_excel_header(row, header):
     indices = [i for i, item in enumerate(row) if isinstance(item, str) and re.search(header, item, re.IGNORECASE)]
     return indices
 
+# finds columns in excel file
 def extract_mean_and_sem(row, identifier):
     averages = find_excel_header(row, "ave")
     sem = find_excel_header(row, "sem")
@@ -204,6 +207,7 @@ def load_binding_summary_excel(filepath):
         summaryDict = parse_binding_summary_sheet(workbook, name, summaryDict)
     return summaryDict
 
+# extracts data for summary table. currently a method for SummaryTable in bindMods
 def parse_binding_summary_sheet(workbook, receptor, summary):
     sheet = workbook[receptor]
     keyHeaders = ['ic50', 'ki', 'hill slope']
@@ -238,6 +242,7 @@ def parse_binding_summary_sheet(workbook, receptor, summary):
             summary[drugID][receptor]["sem"]["hillSlope"] = hillSEM
     return summary
 
+# currently a SummaryTable method
 def make_function_table(srcDir):
     receptorNames = ("5HT1A", "5HT2A", "5HT2B", "5HTR", "5HT2C", "D1", "D2", "D3", "D4")
     dataIdentifiers =  ["FXN", "EC50"]
@@ -254,6 +259,7 @@ def make_function_table(srcDir):
             workbook = pxl.load_workbook(srcDir + "\\" + file, data_only=True)
             parse_wb_sheets(workbook)
 
+# returns nothing?
 def parse_wb_sheets(workbook, summary):
     summaryDict = {}
     for name in workbook.sheetnames:
