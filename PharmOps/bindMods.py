@@ -724,3 +724,8 @@ class TemplateGenerator:
 
     def close_excel_processes(self):
         pass
+
+# manages standards for various assays
+class StandardsLib:
+    def __init__(filepath):
+        pass

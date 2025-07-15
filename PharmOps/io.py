@@ -271,3 +271,18 @@ def parse_wb_sheets(workbook, summary):
                 printNext = False
             if ec50:
                 printNext = True
+
+# add new standards to h5
+def add_drug_standards(filepath, agency, receptor, drug):
+    with h5py.File(filepath, 'a') as h5File:
+        group = h5File.require_group("standards/" + agency)
+        dataset = group.create_dataset(receptor, data=drug)
+
+# load standards from h5
+def load_drug_standards(filepath, agency, receptor):
+    with h5py.File(filepath, 'r') as h5File:
+        if agency not in h5File["standards"]:
+            raise KeyError(f"No data saved for '{agency}'")
+        if receptor not in h5File["standards"][agency]:
+            raise KeyError(f"No standards for receptor '{receptor}' for {agency}")
+    savedStandards = h5File["standards"][agency][receptor][:]

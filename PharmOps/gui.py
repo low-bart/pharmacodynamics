@@ -14,9 +14,11 @@ class BindingGUI:
         self.bindingFrame = tk.Frame(self.main, borderwidth=5, relief="ridge")
         self.functionFrame = tk.Frame(self.main, borderwidth=5, relief="ridge")
         self.triplicateFrame = tk.Frame(self.main, borderwidth=5, relief="ridge")
+        self.standardsFrame = tk.Frame(self.main, borderwidth=5, relief="ridge")
         self.bindingFrame.grid(row=0, column=0)
-        self.functionFrame.grid(row=0, column=1)
-        self.triplicateFrame.grid(row=0, column=2)
+        self.functionFrame.grid(row=1, column=0)
+        self.triplicateFrame.grid(row=2, column=0)
+        self.standardsFrame.grid(row=3, column=0)
         self.newBindingPlateButton = tk.Button(self.bindingFrame, 
                                             text="Import raw binding assay", 
                                             command=self.import_BindingPlate)
@@ -38,6 +40,9 @@ class BindingGUI:
         self.screeningResultsButton = tk.Button(self.triplicateFrame,
                                                 text="Calculate screening results",
                                                 command=self.calculate_trip_screen)
+        self.editStandardsButton = tk.Button(self.standardsFrame,
+                                             text="View and edit standards",
+                                             command=self.edit_standards)
         self.newBindingPlateButton.pack()
         #self.loadBindingPlateButton.pack()
         self.loadDrugReportsButton.pack()
@@ -45,6 +50,7 @@ class BindingGUI:
         self.generateTemplateButton.pack()
         self.labelTriplicatesButton.pack()
         self.screeningResultsButton.pack()
+        self.editStandardsButton.pack()
         
     # creates new window to verify user
     def get_user_info(self):
@@ -239,6 +245,10 @@ class BindingGUI:
                         "*.h5")])
         newWindow = tk.Toplevel(self.main)
         ScreeningGUI(newWindow, fileName)
+
+    def edit_standards(self):
+        newWindow = tk.Toplevel(self.main)
+        StandardsGUI(newWindow)
     
 # Allows for custom behavior in tabular data like cell selection and highlighting
 class CustomTable(tk.Frame):
@@ -1229,3 +1239,28 @@ class TemplateGUI:
             for drug in range(lowRange, highRange):
                 self.drugNames.append(drug)
         TemplateGenerator(saveDir, self.drugNames, self.standardsDict)
+
+class StandardsGUI:
+    def __init__(self, main):
+        self.main = main
+        self.agencySelected = tk.StringVar()
+        self.receptorSelected = tk.StringVar()
+        self.agencySelection = ttk.Combobox()
+        self.receptorSelection = ttk.Combobox()
+        self.agencyAddLabel = tk.Label(self.main,
+                                       text="Add new agency")
+        self.agencyAdd = tk.Entry(self.main)
+        self.receptorAddLabel = tk.Label(self.main,
+                                         text="Add new receptor")
+        self.receptorAdd = tk.Entry(self.main)
+        self.testEntry = EntryMaker(self.main, "EntryTest", "ButtonTest", self.print_test)
+        self.agencyAddLabel.grid(row=0, column=0)
+        self.agencyAdd.grid(row=0, column=1)
+        self.receptorAddLabel.grid(row=1, column=0)
+        self.receptorAdd.grid(row=1, column=1)
+        self.testEntry.grid(row=2, column=0)
+
+    def print_test(self):
+        print("button pushed")
+        print(self.testEntry.get_text())
+        self.testEntry.reset_text()
