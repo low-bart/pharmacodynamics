@@ -272,6 +272,16 @@ def parse_wb_sheets(workbook, summary):
             if ec50:
                 printNext = True
 
+# for standards
+def add_agency(filepath, agency):
+    with h5py.File(filepath, 'a') as h5File:
+        group = h5File.require_group("standards/" + agency)
+
+# for standards
+def add_receptor(filepath, agency, receptor):
+    with h5py.File(filepath, 'a') as h5File:
+        group = h5File.require_group("standards/" + agency + receptor)
+
 # add new standards to h5
 def add_drug_standards(filepath, agency, receptor, drug):
     with h5py.File(filepath, 'a') as h5File:

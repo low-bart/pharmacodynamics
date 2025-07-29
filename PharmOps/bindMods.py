@@ -31,6 +31,35 @@ class AssayMetadata:
         print(self.h5Path)
         print(self.rawDataPath)
 
+@dataclass
+class WellMetadata:
+    drug: str
+    receptor: str
+    agency: str
+    concentration: float
+    ctr: str
+    data: str   #should change it to hold something from an enumeration to specify either data, nsb, or totals
+
+class PlateData:
+    data: pd.DataFrame
+
+    def __init__(self):
+        rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+        cols = [str(i) for i in range(1, 13)]
+        data = []
+        for r in rows:
+            for c in cols:
+                data.append({
+                    'wellID': f'{r}{c}',
+                    'counts': None,
+                    'agency': None,
+                    'drug': None,
+                    'receptor': None,
+                    'concentration': None,
+                    'standard': None
+                })
+        self.data = pd.DataFrame(data)
+
 # Stores 96 well-plate pharmacology assay data. Base class for multiple assays
 class WellData:
     metadata = AssayMetadata()

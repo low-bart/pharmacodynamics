@@ -2,6 +2,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import tkinter as tk
+from tkinter import filedialog, ttk
 
 # abstract base class to inherit modes of cell selection from
 class SelectionStrategy(ABC):
@@ -311,17 +312,22 @@ class BlackWeighingSelection(HighlightAndBlockSelection):
 
 # not sure if unneccessary boilerplate or will be helpful.
 class EntryMaker(tk.Frame):
-    def __init__(self, root, entryText, buttonText, buttonCommand):
+    def __init__(self, root, buttonText, buttonCommand):
         super().__init__(root)
-        self.entryLabel = tk.Label(self, text=entryText)
         self.entryField = tk.Entry(self)
         self.entryButton = tk.Button(self, text=buttonText, command=buttonCommand)
-        self.entryLabel.grid(row=0, column=0)
-        self.entryField.grid(row=0, column=1)
-        self.entryButton.grid(row=0, column=2)
+        self.entryField.grid(row=0, column=0)
+        self.entryButton.grid(row=0, column=1)
 
     def get_text(self):
         return self.entryField.get()
     
     def reset_text(self):
         self.entryField.delete(0, tk.END)
+
+class ComboboxMaker(tk.Frame):
+    def __init__(self, root, items):
+        super().__init__(root)
+        self.selectedItem = tk.StringVar()
+        self.list = ttk.Combobox(self, textvariable=self.selectedItem, values=items)
+        self.list.pack()

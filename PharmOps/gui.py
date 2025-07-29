@@ -1243,24 +1243,30 @@ class TemplateGUI:
 class StandardsGUI:
     def __init__(self, main):
         self.main = main
-        self.agencySelected = tk.StringVar()
         self.receptorSelected = tk.StringVar()
-        self.agencySelection = ttk.Combobox()
+        self.h5Path = io.get_default_h5_path()
+        with h5py.File(self.h5Path, 'a') as f:
+            standards = f.require_group('standards')
+            self.allAgencies = list(standards.keys())
+            print(self.allAgencies)
+        self.agencySelection = ComboboxMaker(self.main, self.allAgencies)
         self.receptorSelection = ttk.Combobox()
-        self.agencyAddLabel = tk.Label(self.main,
-                                       text="Add new agency")
-        self.agencyAdd = tk.Entry(self.main)
-        self.receptorAddLabel = tk.Label(self.main,
-                                         text="Add new receptor")
-        self.receptorAdd = tk.Entry(self.main)
-        self.testEntry = EntryMaker(self.main, "EntryTest", "ButtonTest", self.print_test)
-        self.agencyAddLabel.grid(row=0, column=0)
-        self.agencyAdd.grid(row=0, column=1)
-        self.receptorAddLabel.grid(row=1, column=0)
-        self.receptorAdd.grid(row=1, column=1)
-        self.testEntry.grid(row=2, column=0)
+        self.agencyAdd = EntryMaker(self.main, "Add new agency", self.add_agency)
+        self.receptorAdd = EntryMaker(self.main, "Add new receptor", self.add_receptor)
+        self.agencySelection.pack()
+        self.agencyAdd.pack()
+        self.receptorAdd.pack()
+        self.h5Path = io.get_default_h5_path()
+        with h5py.File(self.h5Path, 'a') as f:
+            print(list(f.keys()))
+        with h5py.File("E://Test//test.h5", 'a') as f:
+            print(list(f.keys()))
 
-    def print_test(self):
-        print("button pushed")
-        print(self.testEntry.get_text())
-        self.testEntry.reset_text()
+    def add_agency(self):
+        agencyName = self.agencyAdd.get_text()
+        io.add_agency(self.h5Path, agencyName)
+        self.agencyAdd.reset_text()
+
+    def add_receptor(self):
+        receptorName = self.receptorAdd.get_text()
+        print(receptorName)
