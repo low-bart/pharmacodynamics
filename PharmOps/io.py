@@ -9,6 +9,9 @@ import os
 import re
 from datetime import datetime
 import openpyxl as pxl
+from tkinter import Tk, filedialog
+import sqlite3 as sql
+import json
 
 # Parses a text file containing raw well-plate data and makes BindingPlate objects
 def read_raw_well_txt(filepath: str, outputClass: WellData):
@@ -296,3 +299,41 @@ def load_drug_standards(filepath, agency, receptor):
         if receptor not in h5File["standards"][agency]:
             raise KeyError(f"No standards for receptor '{receptor}' for {agency}")
     savedStandards = h5File["standards"][agency][receptor][:]
+
+def create_sql_database(dbName: str = "pharm-ops") -> sql.Connection:
+    root = Tk()
+    root.withdraw()
+    filePath = filedialog.askdirectory(mustexist=False)
+    dbName = dbName + ".db"
+    dbPath = os.path.join(filePath, dbName)
+    db = sql.connect(dbPath)
+    root.destroy()
+    return db
+
+def create_sql_table(db: sql.Connection, tableName: str):
+    cur = db.cursor()
+    test = cur.execute(f"CREATE TABLE IF NOT EXISTS {tableName}(wellID, counts, agency, drug, receptor, concentration, standard, ctr)")
+    print(test)
+    res = cur.execute("SELECT name FROM sqlite_master")
+    print(res.fetchall())
+
+def add_plate(db: sql.Connection, tableName: str, plate: PlateData):
+
+    def sanitize_value(val):
+        if pd.isnull(val):
+            return None
+        elif isinstance(val, (np.generic,)):
+            return val.item()  # NumPy scalar to Python native
+        elif isinstance(val, (list, dict)):
+            return json.dumps(val) if val else None  # Empty lists/dicts become NULL
+        elif isinstance(val, bytes):
+            return val.decode('utf-8', errors='ignore')  # Fallback for bytes, if mis-encoded
+        else:
+            return val  # Pass through native int, float, str, None
+
+    cleanData = plate.data.copy()
+
+    # Apply sanitizer to every cell
+    cleanData = cleanData.applymap(sanitize_value)
+
+    cleanData.to_sql(name=tableName, con=db, if_exists='append', index=True, index_label="wellID")

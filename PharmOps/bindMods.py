@@ -16,7 +16,7 @@ class AssayMetadata:
     ctr = []
     plateNo = []
     drug = []
-    receptor = []
+    receptor = None
     concentration = []
     h5Path = []
     rawDataPath = []
@@ -56,9 +56,11 @@ class PlateData:
                     'drug': None,
                     'receptor': None,
                     'concentration': None,
-                    'standard': None
+                    'standard': None,
+                    'ctr': None
                 })
         self.data = pd.DataFrame(data)
+        self.data = self.data.set_index('wellID')
 
 # Stores 96 well-plate pharmacology assay data. Base class for multiple assays
 class WellData:
@@ -99,9 +101,12 @@ class BindingPlate(WellData):
         super().__init__(df, plate)
         self.drugs = ["Drug1", "Drug2", "Drug3", "Drug4"]
         self.highestConc = [None, None, None, None]
-        plateTotals = self.data.loc[self.data.index[0:8], [1, 12]]
+        self.totalsIdx = [1, 12]
+        self.nsbIdx = [2]
+        self.drugIdx = [i for i in range(3, 12)]
+        plateTotals = self.data.loc[self.data.index[0:8], self.totalsIdx]
         self.totals = np.average(plateTotals)
-        plateNSB = self.data.loc[self.data.index[0:8], 2]
+        plateNSB = self.data.loc[self.data.index[0:8], self.nsbIdx]
         self.nsb = np.average(plateNSB) 
 
     def display(self):
@@ -126,6 +131,34 @@ class BindingPlate(WellData):
 
     def update_receptor(self, receptorName):
         self.metadata.receptor = receptorName
+
+    def prepare_for_sql(self):
+        df = PlateData()
+        concentrationSteps = np.linspace(0, -4, num=9, endpoint=True)
+
+        for row in range(0, 8):
+            rowLetter = self.data.index[row]
+            # experiments are done in groupings of 2 rows, this is hard-coded until that structure changes
+            assayIdx = int(np.floor(row/2))
+            drug = self.drugs[assayIdx]
+            highestConc = self.highestConc[assayIdx]
+            for col in range(0, 12):
+                colIdx = col + 1
+                if colIdx in self.totalsIdx:
+                    concentration = None
+                if colIdx in self.nsbIdx:
+                    concentration = None
+                if colIdx in self.drugIdx and highestConc is not None:
+                    concIdx = self.drugIdx.index(colIdx)
+                    concentration = highestConc + concentrationSteps[concIdx]
+                colNum = col + 1
+                index = f"{rowLetter}{colNum}"
+                df.data.at[index, "counts"] = self.data.loc[rowLetter, colNum]
+                df.data.at[index, "drug"] = drug
+                df.data.at[index, "receptor"] = self.metadata.receptor
+                df.data.at[index, "concentration"] = concentration
+        print(df.data)
+        return df
 
 # For use with screening assays
 class ScreeningPlate(WellData):
@@ -160,14 +193,14 @@ class DrugReports:
     pctSpecificBinding = []
     omittedVals = []
 
-    def __init__(self, wellData, index):
+    def __init__(self, wellData: BindingPlate, index):
         self.drug = wellData.drugs[index]
         self.metadata = wellData.metadata
         startRow = (index) * 2
         endRow = startRow + 2
         drugData = wellData.data.iloc[startRow:endRow]
         self.averageSpecific = np.average(wellData.totals)
-        testData = drugData.loc[drugData.index[:], [3, 4, 5, 6, 7, 8, 9, 10, 11]].values
+        testData = drugData.loc[drugData.index[:], wellData.drugIdx].values
         self.average = [testData.mean(axis=0)]
         self.specific = [x - wellData.nsb for x in self.average]
         self.specificBound = wellData.totals - wellData.nsb
